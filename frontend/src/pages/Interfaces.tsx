@@ -23,9 +23,9 @@ const FILTER_PRESETS = [
   { label: '🇰🇷 韩国', value: '(?i)韩|kr|korea|seoul' },
 ]
 
-function FilterField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function FilterField({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div className="flex items-center gap-1">
         <Label>节点筛选 (正则)</Label>
         <DropdownMenu>
@@ -231,17 +231,17 @@ export default function Interfaces() {
                       <Select 
                         value={g.candidateCount > 0 ? g.current : undefined} 
                         onValueChange={(val: string) => handleSelectGroup(g.name, val)}
-                        disabled={g.candidateCount === 0}
+                        disabled={g.candidateCount === 0 || g.mode === 'auto'}
                       >
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder={g.candidateCount === 0 ? "无可用节点匹配" : "选择节点"} />
+                          <SelectValue placeholder={g.candidateCount === 0 ? "无可用节点匹配" : g.mode === 'auto' ? "自动测速" : "选择节点"} />
                         </SelectTrigger>
                         <SelectContent>
                           {g.candidates?.map((c: any) => <SelectItem key={c.name} value={c.name}>{c.name} ({c.type})</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Button variant="secondary" size="icon" onClick={() => handleHealthcheck(g.name)} title="健康检查" disabled={g.candidateCount === 0}>
-                        <RefreshCw className={`h-4 w-4 ${g.candidateCount === 0 ? 'opacity-50' : ''}`} />
+                      <Button variant="secondary" size="icon" onClick={() => handleHealthcheck(g.name)} title="健康检查" disabled={g.candidateCount === 0 || g.mode === 'auto'}>
+                        <RefreshCw className={`h-4 w-4 ${(g.candidateCount === 0 || g.mode === 'auto') ? 'opacity-50' : ''}`} />
                       </Button>
                     </div>
                   )}
@@ -278,7 +278,20 @@ export default function Interfaces() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>模式</Label>
+                <div className="flex items-center gap-1">
+                  <Label>模式</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" className="inline-flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-600 focus:outline-none">
+                        <HelpCircle className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-72 p-3 text-xs text-zinc-600 leading-relaxed shadow-lg">
+                      <p className="mb-2"><span className="font-semibold text-zinc-900">manual (手动)</span><br/>所有流量固定走您手动选择的节点。</p>
+                      <p><span className="font-semibold text-zinc-900">auto (自动)</span><br/>系统会在后台对节点进行测速，并自动为您切换至当前延迟最低、连通性最好的节点。</p>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
                 <Select value={groupForm.mode} onValueChange={(val: string) => setGroupForm({ ...groupForm, mode: val })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -287,7 +300,7 @@ export default function Interfaces() {
                   </SelectContent>
                 </Select>
               </div>
-              <FilterField value={groupForm.filter} onChange={(v) => setGroupForm({ ...groupForm, filter: v })} />
+              <FilterField value={groupForm.filter} onChange={(v) => setGroupForm({ ...groupForm, filter: v })} disabled={groupForm.mode === 'auto'} />
             </div>
           </div>
           <DialogFooter>
@@ -314,7 +327,20 @@ export default function Interfaces() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>模式</Label>
+                <div className="flex items-center gap-1">
+                  <Label>模式</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" className="inline-flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-600 focus:outline-none">
+                        <HelpCircle className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-72 p-3 text-xs text-zinc-600 leading-relaxed shadow-lg">
+                      <p className="mb-2"><span className="font-semibold text-zinc-900">manual (手动)</span><br/>所有流量固定走您手动选择的节点。</p>
+                      <p><span className="font-semibold text-zinc-900">auto (自动)</span><br/>系统会在后台对节点进行测速，并自动为您切换至当前延迟最低、连通性最好的节点。</p>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
                 <Select value={groupForm.mode} onValueChange={(val: string) => setGroupForm({ ...groupForm, mode: val })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -323,7 +349,7 @@ export default function Interfaces() {
                   </SelectContent>
                 </Select>
               </div>
-              <FilterField value={groupForm.filter} onChange={(v) => setGroupForm({ ...groupForm, filter: v })} />
+              <FilterField value={groupForm.filter} onChange={(v) => setGroupForm({ ...groupForm, filter: v })} disabled={groupForm.mode === 'auto'} />
             </div>
           </div>
           <DialogFooter>
