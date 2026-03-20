@@ -198,7 +198,7 @@ export default function Interfaces() {
             </p>
           ) : (
             groups.map((g: any) => (
-              <Card key={g.name} className={g.providerMissing || g.providerDisabled ? 'border-amber-200 bg-amber-50/30' : ''}>
+              <Card key={g.name} className={g.providerMissing || g.providerDisabled || g.candidateCount === 0 ? 'border-red-100 bg-gradient-to-b from-white to-red-50/30 shadow-[0_8px_30px_-6px_rgba(239,68,68,0.15)] relative z-10 transition-shadow' : 'shadow-sm'}>
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -226,15 +226,23 @@ export default function Interfaces() {
                     </div>
                   )}
 
-                  {!g.providerMissing && !g.providerDisabled && g.candidateCount > 0 && (
+                  {!g.providerMissing && !g.providerDisabled && (
                     <div className="flex items-center gap-2 mb-3">
-                      <Select value={g.current} onValueChange={(val: string) => handleSelectGroup(g.name, val)}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="选择节点" /></SelectTrigger>
+                      <Select 
+                        value={g.candidateCount > 0 ? g.current : undefined} 
+                        onValueChange={(val: string) => handleSelectGroup(g.name, val)}
+                        disabled={g.candidateCount === 0}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={g.candidateCount === 0 ? "无可用节点匹配" : "选择节点"} />
+                        </SelectTrigger>
                         <SelectContent>
-                          {g.candidates.map((c: any) => <SelectItem key={c.name} value={c.name}>{c.name} ({c.type})</SelectItem>)}
+                          {g.candidates?.map((c: any) => <SelectItem key={c.name} value={c.name}>{c.name} ({c.type})</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Button variant="secondary" size="icon" onClick={() => handleHealthcheck(g.name)} title="健康检查"><RefreshCw className="h-4 w-4" /></Button>
+                      <Button variant="secondary" size="icon" onClick={() => handleHealthcheck(g.name)} title="健康检查" disabled={g.candidateCount === 0}>
+                        <RefreshCw className={`h-4 w-4 ${g.candidateCount === 0 ? 'opacity-50' : ''}`} />
+                      </Button>
                     </div>
                   )}
 
