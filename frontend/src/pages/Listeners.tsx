@@ -24,13 +24,36 @@ function randomString(length: number): string {
 function generateUsername(): string { return 'user' + randomString(6) }
 function generatePassword(): string { return randomString(16) }
 
+/* ── Clipboard helper ── */
+function copyText(text: string, successMsg: string) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast.success(successMsg)).catch(() => fallbackCopy(text, successMsg))
+  } else {
+    fallbackCopy(text, successMsg)
+  }
+}
+
+function fallbackCopy(text: string, successMsg: string) {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  try {
+    document.execCommand('copy')
+    toast.success(successMsg)
+  } catch (err) {
+    toast.error('复制失败，请手动选择文字进行复制')
+  }
+  document.body.removeChild(textarea)
+}
+
 /* ── PasswordCell component ── */
 function PasswordCell({ value }: { value: string }) {
   const [visible, setVisible] = useState(false)
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(value).then(() => toast.success('密码已复制'))
-  }
+  const handleCopy = () => copyText(value, '密码已复制')
 
   return (
     <span className="inline-flex items-center gap-1">
@@ -208,7 +231,12 @@ export default function Listeners() {
                           <div key={idx} className="space-y-1.5">
                             <div className="flex justify-between items-center">
                               <span className="text-zinc-500">用户名</span>
-                              <span className="font-mono text-xs text-zinc-900 select-all">{u.username}</span>
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono text-xs text-zinc-900 select-all">{u.username}</span>
+                                <button type="button" onClick={() => copyText(u.username, '用户名已复制')} className="p-0.5 rounded hover:bg-zinc-200 text-zinc-400 hover:text-zinc-600 transition-colors" title="复制用户名">
+                                  <Copy className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-zinc-500">密码</span>

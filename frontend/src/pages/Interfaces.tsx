@@ -8,7 +8,79 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { Trash2, Pencil, AlertTriangle, RefreshCw, FolderPlus } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Trash2, Pencil, AlertTriangle, RefreshCw, FolderPlus, HelpCircle, ChevronDown } from 'lucide-react'
+
+/* ── Filter presets ── */
+const FILTER_PRESETS = [
+  { label: '🇭🇰 香港', value: '(?i)港|hk|hong ?kong' },
+  { label: '🇺🇸 美国', value: '(?i)美|us|united ?states|america' },
+  { label: '🇯🇵 日本', value: '(?i)日|jp|japan|tokyo' },
+  { label: '🇸🇬 新加坡', value: '(?i)新|sg|singapore' },
+  { label: '🇬🇧 英国', value: '(?i)英|uk|gb|britain|london' },
+  { label: '🇩🇪 德国', value: '(?i)德|de|germany|frankfurt' },
+  { label: '🇹🇼 台湾', value: '(?i)台|tw|taiwan' },
+  { label: '🇰🇷 韩国', value: '(?i)韩|kr|korea|seoul' },
+]
+
+function FilterField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1">
+        <Label>节点筛选 (正则)</Label>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-600"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-72 p-3 text-xs text-zinc-600 leading-relaxed shadow-lg">
+            使用正则表达式筛选匹配节点。<br/>
+            • <code className="bg-zinc-100 px-1 rounded text-zinc-800">(?i)</code> 表示忽略大小写<br/>
+            • 用 <code className="bg-zinc-100 px-1 rounded text-zinc-800">|</code> 分隔多个关键词<br/>
+            • 示例: <code className="bg-zinc-100 px-1 rounded text-zinc-800">(?i)港|hk|hong ?kong</code><br/>
+            匹配含 港、HK、Hong Kong 的节点
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="relative">
+        <Input 
+          className="font-mono text-sm pr-10"
+          placeholder="留空为全选 (不筛选)" 
+          value={value} 
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} 
+        />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button 
+              type="button" 
+              className="absolute right-0 top-0 h-full px-3 text-zinc-400 hover:text-zinc-600 flex items-center justify-center"
+              title="选择预设地区"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <div className="px-2 py-1.5 text-xs font-semibold text-zinc-500">地区预设</div>
+            {FILTER_PRESETS.map(p => (
+              <DropdownMenuItem key={p.value} onSelect={() => onChange(p.value)} className="cursor-pointer">
+                {p.label}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onChange('')} className="cursor-pointer">
+              <span>🧹 清空 (全选)</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  )
+}
 
 /* ── Egress Group form ── */
 interface GroupForm { name: string; provider: string; mode: string; filter: string }
@@ -207,10 +279,7 @@ export default function Interfaces() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>节点筛选 (正则)</Label>
-                <Input placeholder="(?i)港|hk|hong ?kong" value={groupForm.filter} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGroupForm({ ...groupForm, filter: e.target.value })} />
-              </div>
+              <FilterField value={groupForm.filter} onChange={(v) => setGroupForm({ ...groupForm, filter: v })} />
             </div>
           </div>
           <DialogFooter>
@@ -246,10 +315,7 @@ export default function Interfaces() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>节点筛选 (正则)</Label>
-                <Input placeholder="(?i)港|hk|hong ?kong" value={groupForm.filter} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGroupForm({ ...groupForm, filter: e.target.value })} />
-              </div>
+              <FilterField value={groupForm.filter} onChange={(v) => setGroupForm({ ...groupForm, filter: v })} />
             </div>
           </div>
           <DialogFooter>
