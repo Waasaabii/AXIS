@@ -1,0 +1,21 @@
+[Unit]
+Description=ProxyRelay Control Plane
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=proxyrelay
+Group=proxyrelay
+WorkingDirectory=/opt/proxyrelay
+Environment=PROXYRELAY_CONFIG=/etc/proxyrelay/proxyrelay.yaml
+ExecStart=/usr/bin/env node /opt/proxyrelay/src/index.js serve
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/etc/proxyrelay /var/lib/proxyrelay /opt/proxyrelay/runtime
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,74 @@
+server:
+  host: 127.0.0.1
+  port: 11234
+  startup_refresh: true
+
+admin:
+  username: admin
+  password: change-me-now
+  session_ttl_hours: 12
+
+runtime:
+  workdir: /var/lib/proxyrelay/runtime
+  mihomo_binary: /usr/local/bin/mihomo
+  external_controller: http://127.0.0.1:11235
+  external_secret: change-me-controller-secret
+  render_only: false
+
+subscriptions:
+  - name: airport-main
+    type: mihomo-http
+    url: https://example.com/subscription
+    interval: 3600
+    enabled: true
+    health_check_url: https://www.gstatic.com/generate_204
+    health_check_interval: 300
+
+egress_groups:
+  - name: egress-hk-manual
+    provider: airport-main
+    mode: manual
+    filter: "(?i)港|hk|hong ?kong"
+
+  - name: egress-jp-manual
+    provider: airport-main
+    mode: manual
+    filter: "(?i)日|jp|japan"
+
+  - name: egress-us-auto
+    provider: airport-main
+    mode: auto
+    filter: "(?i)美|us|united states|america"
+    health_check_url: https://www.gstatic.com/generate_204
+    interval: 300
+
+listeners:
+  - name: hk-socks
+    type: socks
+    listen: 0.0.0.0
+    port: 10801
+    udp: true
+    users:
+      - username: user_hk
+        password: pass_hk
+    egress_group: egress-hk-manual
+
+  - name: jp-socks
+    type: socks
+    listen: 0.0.0.0
+    port: 10802
+    udp: true
+    users:
+      - username: user_jp
+        password: pass_jp
+    egress_group: egress-jp-manual
+
+  - name: us-socks
+    type: socks
+    listen: 0.0.0.0
+    port: 10803
+    udp: true
+    users:
+      - username: user_us
+        password: pass_us
+    egress_group: egress-us-auto

@@ -1,0 +1,18 @@
+{
+  "name": "proxyrelay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ProxyRelay control plane for mihomo-based SOCKS5 relay gateway",
+  "scripts": {
+    "start": "node src/index.js serve",
+    "dev": "node --watch src/index.js serve",
+    "test": "node --test",
+    "hash-password": "node src/index.js hash-password",
+    "preflight": "node src/index.js preflight",
+    "build:ui": "cd frontend && npm install && npm run build"
+  },
+  "dependencies": {
+    "yaml": "^2.8.2"
+  }
+}
