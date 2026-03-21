@@ -129,11 +129,11 @@ if ! wait_for_controller; then
   exit 1
 fi
 
-step 6 "start proxyrelay"
+step 6 "start axis"
 printf 'config file: %s\n' "${CONFIG_FILE}"
 printf 'login url : http://%s:%s/login\n' "${SERVER_HOST}" "${SERVER_PORT}"
 printf 'press Ctrl+C to stop both processes\n\n'
 
 exec env PROXYRELAY_CONFIG="${CONFIG_FILE}" \
   stdbuf -oL -eL node src/index.js serve \
-  > >(sed 's/^/[proxyrelay] /') 2>&1
+  > >(sed 's/^/[axis] /') 2>&1

@@ -60,7 +60,7 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 w-64 border-r bg-white pb-10">
         <div className="flex h-16 items-center px-6 border-b">
-          <span className="text-xs font-bold tracking-wider text-zinc-500 uppercase">PROXYRELAY</span>
+          <span className="text-sm font-bold tracking-widest text-zinc-800 uppercase">A X I S</span>
         </div>
         <div className="px-4 py-6">
           <h2 className="mb-2 px-2 text-lg font-semibold tracking-tight">控制台</h2>

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-#  ProxyRelay — systemd 服务管理脚本
+#  AXIS (Anycast X-Proxy Integration System) — systemd 服务管理脚本
 #  用法: sudo ./service.sh {install|uninstall|start|stop|restart|status|logs}
 # ============================================================================
 set -euo pipefail

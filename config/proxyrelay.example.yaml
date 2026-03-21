@@ -1,5 +1,5 @@
 # ============================================================================
-#  ProxyRelay 配置文件模板
+#  AXIS (Anycast X-Proxy Integration System) 配置文件模板
 #  首次运行 ./start.sh 或 sudo ./service.sh install 时，
 #  系统会自动复制本文件为 config/proxyrelay.yaml。
 #  请勿将 config/proxyrelay.yaml 提交到版本控制。

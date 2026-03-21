@@ -79,7 +79,7 @@ export default function Login() {
       <Card className="w-full max-w-sm">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold tracking-tight">
-            ProxyRelay
+            AXIS
           </CardTitle>
           <CardDescription>
             {requiresReset ? "检测到默认凭据，请先修改密码" : "输入管理员账号密码以访问控制台"}
