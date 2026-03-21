@@ -12,7 +12,7 @@ CONFIG_DIR="${CONFIG_DIR:-/etc/proxyrelay}"
 STATE_DIR="${STATE_DIR:-/var/lib/proxyrelay}"
 RUNTIME_DIR="${STATE_DIR}/runtime"
 SERVICE_DIR="/etc/systemd/system"
-PROXYRELAY_USER="${PROXYRELAY_USER:-proxyrelay}"
+PROXYRELAY_USER="${PROXYRELAY_USER:-${SUDO_USER:-root}}"
 PROXYRELAY_GROUP="${PROXYRELAY_GROUP:-${PROXYRELAY_USER}}"
 MIHOMO_BIN="${MIHOMO_BIN:-/usr/local/bin/mihomo}"
 MIHOMO_VERSION="${MIHOMO_VERSION:-v1.19.21}"
@@ -132,10 +132,10 @@ cmd_install() {
   # ── 2. system user & dirs
   log "配置系统用户与目录..."
   if ! getent group "${PROXYRELAY_GROUP}" >/dev/null 2>&1; then
-    groupadd --system "${PROXYRELAY_GROUP}"
+    groupadd --system "${PROXYRELAY_GROUP}" || true
   fi
   if ! id "${PROXYRELAY_USER}" >/dev/null 2>&1; then
-    useradd --system --home "${APP_DIR}" --shell /usr/sbin/nologin --gid "${PROXYRELAY_GROUP}" "${PROXYRELAY_USER}"
+    useradd --system --home "${APP_DIR}" --shell /usr/sbin/nologin --gid "${PROXYRELAY_GROUP}" "${PROXYRELAY_USER}" || true
   fi
   ok "用户 ${PROXYRELAY_USER} 就绪"
 
@@ -245,9 +245,17 @@ cmd_restart() {
 
 cmd_status() {
   printf "\n${CYAN}── proxyrelayd ──${NC}\n"
-  systemctl status proxyrelayd --no-pager -l 2>/dev/null || warn "proxyrelayd 未安装"
+  if [[ -f "${SERVICE_DIR}/proxyrelayd.service" ]]; then
+    systemctl status proxyrelayd --no-pager -l || true
+  else
+    warn "proxyrelayd 未安装"
+  fi
   printf "\n${CYAN}── mihomo ──${NC}\n"
-  systemctl status mihomo --no-pager -l 2>/dev/null || warn "mihomo 未安装"
+  if [[ -f "${SERVICE_DIR}/mihomo.service" ]]; then
+    systemctl status mihomo --no-pager -l || true
+  else
+    warn "mihomo 未安装"
+  fi
   printf "\n"
 }
 
@@ -257,6 +265,23 @@ cmd_logs() {
   journalctl -u proxyrelayd --no-pager -n "${lines}" 2>/dev/null || true
   printf "\n${CYAN}[mihomo 日志]${NC}\n"
   journalctl -u mihomo --no-pager -n "${lines}" 2>/dev/null || true
+}
+
+cmd_reset_password() {
+  require_root
+  log "准备重置管理员密码..."
+  if [[ ! -f "${CONFIG_FILE}" ]]; then
+    err "未找到配置文件: ${CONFIG_FILE}"
+    exit 1
+  fi
+  # 清空 password_hash 和 password，触发强制重置
+  perl -0pi -e '
+    s/^  password_hash:.*$/  password_hash: ""/m;
+    s/^  password:.*$/  password: ""/m;
+  ' "${CONFIG_FILE}"
+  ok "密码已清空。正在重启服务..."
+  systemctl restart proxyrelayd
+  ok "重置完成！请在浏览器中使用默认账号 admin / admin 登录，并设置新密码。"
 }
 
 cmd_help() {
@@ -274,6 +299,7 @@ ProxyRelay 服务管理工具
   restart     重启服务
   status      查看服务状态
   logs        查看最近日志
+  reset-password 一键恢复默认 admin/admin 账号密码
 
 环境变量:
   MIHOMO_BIN        mihomo 路径       (默认: /usr/local/bin/mihomo)
@@ -295,5 +321,6 @@ case "${1:-help}" in
   restart)    cmd_restart ;;
   status)     cmd_status ;;
   logs)       cmd_logs "$@" ;;
+  reset-password) cmd_reset_password ;;
   *)          cmd_help ;;
 esac

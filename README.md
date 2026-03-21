@@ -255,12 +255,13 @@ sudo ./service.sh install
 ### 服务管理命令
 
 ```bash
-sudo ./service.sh start      # 启动服务
-sudo ./service.sh stop       # 停止服务
-sudo ./service.sh restart    # 重启服务
-sudo ./service.sh status     # 查看运行状态
-sudo ./service.sh logs       # 查看最近日志
-sudo ./service.sh uninstall  # 卸载 systemd 服务 (保留配置与数据)
+sudo ./service.sh start          # 启动服务
+sudo ./service.sh stop           # 停止服务
+sudo ./service.sh restart        # 重启服务
+sudo ./service.sh status         # 查看运行状态
+sudo ./service.sh logs           # 查看最近日志
+sudo ./service.sh reset-password # 一键重置密码并恢复为 admin/admin
+sudo ./service.sh uninstall      # 卸载 systemd 服务 (保留配置与数据)
 ```
 
 ### 推荐目录结构
