@@ -45,8 +45,9 @@ export async function loadConfig(configPath) {
     },
     admin: {
       username: parsed.admin?.username || "admin",
-      password: parsed.admin?.password || "",
+      password: parsed.admin?.password || (parsed.admin?.password_hash ? "" : "admin"),
       password_hash: parsed.admin?.password_hash || "",
+      requires_password_reset: !parsed.admin?.password_hash && !parsed.admin?.password,
       session_secret: parsed.admin?.session_secret || "",
       session_ttl_hours: Number(parsed.admin?.session_ttl_hours || 12)
     },
@@ -69,7 +70,6 @@ export async function loadConfig(configPath) {
 export function validateConfig(config) {
   assert(config.server.port > 0, "server.port 必须大于 0");
   assert(config.admin.username, "admin.username 不能为空");
-  assert(config.admin.password || config.admin.password_hash, "admin.password 或 admin.password_hash 至少提供一个");
 
   const providerNames = new Set();
   for (const subscription of config.subscriptions) {

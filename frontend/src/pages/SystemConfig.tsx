@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/services/api'
 import Editor from '@monaco-editor/react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { toast } from 'sonner'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Save, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 
@@ -16,6 +18,10 @@ export default function SystemConfig() {
   
   const [editorContent, setEditorContent] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
 
   // Sync config when loaded
   useEffect(() => {
@@ -62,9 +68,10 @@ export default function SystemConfig() {
       </div>
 
       <Tabs defaultValue="editor" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="w-[300px] grid w-full grid-cols-2">
+        <TabsList className="grid w-[450px] grid-cols-3">
           <TabsTrigger value="editor">控制面配置 (JSON)</TabsTrigger>
-          <TabsTrigger value="rendered">渲染产物 (YAML)</TabsTrigger>
+          <TabsTrigger value="rendered">运行态预览 (YAML)</TabsTrigger>
+          <TabsTrigger value="password">安全凭据 (Security)</TabsTrigger>
         </TabsList>
         
         <TabsContent value="editor" className="flex-1 flex flex-col mt-4 min-h-0">
@@ -131,6 +138,69 @@ export default function SystemConfig() {
                   }}
                 />
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="password" className="flex-1 flex flex-col mt-4 min-h-0">
+          <Card className="max-w-md border-zinc-200">
+            <CardHeader className="py-4 border-b bg-zinc-50/50">
+              <CardTitle className="text-base">修改管理员密码</CardTitle>
+              <CardDescription className="text-xs">
+                密码将使用 Scrypt 哈希加密存储在 proxyrelay.yaml 中。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">新密码</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">确认新密码</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+              <Button 
+                onClick={async () => {
+                  if (newPassword !== confirmPassword) {
+                    toast.error("两次输入的密码不一致")
+                    return
+                  }
+                  if (newPassword.length < 6) {
+                    toast.error("密码长度至少为 6 位")
+                    return
+                  }
+                  setIsChangingPassword(true)
+                  try {
+                    const res = await fetch("/api/session/password", {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ password: newPassword })
+                    })
+                    const data = await res.json()
+                    if (!res.ok) throw new Error(data.error || "修改失败")
+                    toast.success("密码修改成功")
+                    setNewPassword("")
+                    setConfirmPassword("")
+                  } catch (err: any) {
+                    toast.error(err.message)
+                  } finally {
+                    setIsChangingPassword(false)
+                  }
+                }} 
+                disabled={isChangingPassword || !newPassword || !confirmPassword}
+              >
+                {isChangingPassword ? "提交中..." : "保存新密码"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

@@ -35,7 +35,7 @@ export default function AppLayout() {
   const handleLogout = async () => {
     try {
       await fetch('/api/session', { method: 'DELETE' });
-      navigate('/login');
+      window.location.href = '/login';
     } catch (err) {
       toast.error('退出登录失败');
     }

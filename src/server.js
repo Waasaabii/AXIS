@@ -52,6 +52,7 @@ export async function startServer() {
 
         return json(response, 200, {
           authenticated: true,
+          requiresPasswordReset: !!controlPlane.config.admin.requires_password_reset,
           user: { username: session.username }
         });
       }
@@ -69,8 +70,39 @@ export async function startServer() {
         response.setHeader("Set-Cookie", cookie);
         return json(response, 200, {
           ok: true,
+          requiresPasswordReset: !!controlPlane.config.admin.requires_password_reset,
           user: { username: result.user.username }
         });
+      }
+
+      if (pathname === "/api/session/password" && method === "PUT") {
+        if (!session.valid) {
+          return json(response, 401, { ok: false, error: "未登录或会话已过期" });
+        }
+        const rawBody = await getRequestBody(request);
+        const payload = rawBody ? JSON.parse(rawBody) : {};
+        if (!payload.password) {
+          return json(response, 400, { ok: false, error: "新密码不能为空" });
+        }
+        try {
+          const authLib = await import("./lib/auth.js");
+          const hash = authLib.createPasswordHash(payload.password);
+          const config = controlPlane.config;
+          config.admin.password_hash = hash;
+          config.admin.password = "";
+          config.admin.requires_password_reset = false;
+          await controlPlane.saveConfig(config);
+          controlPlane.authContext = authLib.createAuthContext({
+            username: config.admin.username,
+            passwordHash: hash,
+            password: "",
+            sessionSecret: config.admin.session_secret,
+            sessionTtlHours: config.admin.session_ttl_hours
+          });
+          return json(response, 200, { ok: true });
+        } catch (err) {
+          return json(response, 500, { ok: false, error: "修改密码失败: " + err.message });
+        }
       }
 
       if (pathname === "/api/session" && method === "DELETE") {

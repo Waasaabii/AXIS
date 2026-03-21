@@ -1,0 +1,94 @@
+# ============================================================================
+#  ProxyRelay 配置文件模板
+#  首次运行 ./start.sh 或 sudo ./service.sh install 时，
+#  系统会自动复制本文件为 config/proxyrelay.yaml。
+#  请勿将 config/proxyrelay.yaml 提交到版本控制。
+# ============================================================================
+
+server:
+  host: 0.0.0.0
+  port: 8787
+  startup_refresh: false
+
+admin:
+  username: admin
+  password: ""           # 留空配合 password_hash 为空 → 首次使用 admin/admin 登录并强制改密
+  password_hash: ""
+  session_secret: ""
+  session_ttl_hours: 12
+
+runtime:
+  workdir: ../runtime
+  mihomo_binary: mihomo
+  external_controller: http://127.0.0.1:9090
+  external_secret: ""
+  render_only: true
+
+# ── 订阅源 ────────────────────────────────────────────────────────────────
+# 将 url 替换为你的真实机场订阅地址
+subscriptions:
+  - name: my-airport
+    type: mihomo-http        # mihomo-http (Clash YAML) 或 clash-http (Base64)
+    url: https://example.com/your-subscription-url
+    interval: 3600
+    enabled: true
+    health_check_url: https://www.gstatic.com/generate_204
+    health_check_interval: 300
+
+# ── 出站路由群组 ──────────────────────────────────────────────────────────
+egress_groups:
+  - name: egress-hk-manual
+    provider: my-airport
+    mode: manual
+    filter: "(?i)港|hk|hong ?kong"
+    exclude_filter: ""
+
+  - name: egress-jp-manual
+    provider: my-airport
+    mode: manual
+    filter: "(?i)日|jp|japan"
+    exclude_filter: ""
+
+  - name: egress-us-auto
+    provider: my-airport
+    mode: auto
+    filter: "(?i)美|us|united states|america"
+    exclude_filter: ""
+    health_check_url: https://www.gstatic.com/generate_204
+    interval: 300
+
+# ── 入站监听器 ────────────────────────────────────────────────────────────
+# 请修改 users 中的用户名和密码
+listeners:
+  - name: hk-socks
+    type: socks
+    listen: 0.0.0.0
+    port: 10801
+    udp: true
+    enabled: true
+    users:
+      - username: user_hk
+        password: change-me
+    egress_group: egress-hk-manual
+
+  - name: jp-socks
+    type: socks
+    listen: 0.0.0.0
+    port: 10802
+    udp: true
+    enabled: true
+    users:
+      - username: user_jp
+        password: change-me
+    egress_group: egress-jp-manual
+
+  - name: us-socks
+    type: socks
+    listen: 0.0.0.0
+    port: 10803
+    udp: true
+    enabled: true
+    users:
+      - username: user_us
+        password: change-me
+    egress_group: egress-us-auto
