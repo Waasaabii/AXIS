@@ -36,6 +36,10 @@ function getPnpmCommand() {
 
 const frontendWorkspaceName = "@axis/frontend";
 
+function getGoCommand() {
+  return process.platform === "win32" ? "go.exe" : "go";
+}
+
 function getExecutableCandidates(binary) {
   if (path.isAbsolute(binary) || binary.includes(path.sep)) {
     return [binary];
@@ -192,7 +196,7 @@ async function writeDevConfig() {
 
 async function runPreflight() {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["src/index.js", "preflight"], {
+    const child = spawn(getGoCommand(), ["run", "./cmd/axis", "preflight"], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -267,7 +271,7 @@ async function main() {
     AXIS_UI_PORT: String(uiPort),
   };
 
-  spawnProcess("axis", process.execPath, ["--watch", "src/index.js", "serve"], backendEnv);
+  spawnProcess("axis", getGoCommand(), ["run", "./cmd/axis", "serve"], backendEnv);
   spawnProcess("ui", getPnpmCommand(), ["--filter", frontendWorkspaceName, "dev", "--host", uiHost, "--port", String(uiPort)], frontendEnv);
 
   log(`React 开发服务器: http://${uiHost}:${uiPort}`);

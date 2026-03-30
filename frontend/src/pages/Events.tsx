@@ -1,11 +1,42 @@
 import useSWR from 'swr'
-import { fetcher } from '@/services/api'
+import { api, type EventEntry } from '@/services/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 
+const levelLabelMap: Record<string, string> = {
+  error: '问题',
+  warn: '提醒',
+  info: '信息',
+}
+
+const scopeLabelMap: Record<string, string> = {
+  auth: '登录',
+  config: '配置',
+  controller: '代理核心连接',
+  group: '出口组',
+  healthcheck: '健康检查',
+  provider: '订阅',
+  'provider-test': '订阅测试',
+  reload: '配置应用',
+  render: '配置生成',
+  runtime: '代理核心',
+  'runtime-apply': '配置下发',
+  setup: '首次初始化',
+}
+
+function sanitizeEventMessage(message: string) {
+  return message
+    .replace(/^未找到 mihomo 二进制: /, '未找到代理核心程序：')
+    .replace(/^已生成 runtime\/mihomo\.yaml$/, '最新代理核心配置已生成')
+    .replace('当前为 render-only 模式，仅完成配置渲染', '当前只保存配置，暂不会自动应用到代理核心。')
+    .replace('当前为 render-only 模式，未接入运行态 controller。', '当前只保存配置，还没有接管代理核心。')
+    .replace(/^controller 返回 (\d+)$/, '连接代理核心失败（状态码 $1）')
+    .replace(/^controller 可达$/, '代理核心连接正常')
+}
+
 export default function Events() {
-  const { data: events } = useSWR('/api/events', fetcher, { refreshInterval: 5000 })
+  const { data: events } = useSWR('/api/events', api.getEvents, { refreshInterval: 5000 })
 
   const getBadgeStyle = (level: string) => {
     switch (level.toLowerCase()) {
@@ -19,7 +50,7 @@ export default function Events() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">事件日志</h1>
-        <p className="text-zinc-500">查看控制面的重要变更与告警事件。</p>
+        <p className="text-zinc-500">查看服务运行过程中的重要变化和提醒。</p>
       </div>
 
       <Card className="shadow-sm border-zinc-200">
@@ -30,21 +61,21 @@ export default function Events() {
             <div className="p-8 text-center text-sm text-zinc-500">暂无事件记录。</div>
           ) : (
             <div className="divide-y divide-zinc-100">
-              {events.map((event: any, idx: number) => (
+              {events.map((event: EventEntry, idx: number) => (
                 <div key={idx} className="flex items-start gap-4 p-4 hover:bg-zinc-50 transition-colors">
                   <div className="flex-1 space-y-1 text-sm">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-zinc-900">{event.message}</h4>
+                      <h4 className="font-medium text-zinc-900">{sanitizeEventMessage(event.message)}</h4>
                       <span className="text-xs text-zinc-400 shrink-0">
                         {format(new Date(event.at), 'MM-dd HH:mm:ss', { locale: zhCN })}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-medium ${getBadgeStyle(event.level)}`}>
-                        {event.level}
+                        {levelLabelMap[event.level] || event.level}
                       </span>
-                      <span className="text-xs text-zinc-500 font-mono bg-zinc-100 px-1.5 py-0.5 rounded">
-                        {event.scope}
+                      <span className="text-xs text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded">
+                        {scopeLabelMap[event.scope] || event.scope}
                       </span>
                     </div>
                   </div>

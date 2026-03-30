@@ -3,9 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { api, ApiError } from "@/services/api"
 import { toast } from "sonner"
+import { useNavigate } from "react-router-dom"
 
 export default function Login() {
+  const navigate = useNavigate()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -18,17 +21,7 @@ export default function Login() {
     setIsLoading(true)
 
     try {
-      const res = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || "登录失败")
-      }
+      const data = await api.login({ username, password })
 
       if (data.requiresPasswordReset) {
         setRequiresReset(true)
@@ -36,9 +29,9 @@ export default function Login() {
       }
 
       toast.success("登录成功")
-      window.location.href = "/dashboard"
-    } catch (err: any) {
-      toast.error(err.message)
+      navigate(data.setupRequired ? "/setup" : "/dashboard", { replace: true })
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "登录失败")
     } finally {
       setIsLoading(false)
     }
@@ -57,18 +50,12 @@ export default function Login() {
 
     setIsLoading(true)
     try {
-      const res = await fetch("/api/session/password", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: newPassword }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "修改失败")
+      await api.updatePassword({ password: newPassword })
 
       toast.success("密码修改成功")
-      window.location.href = "/dashboard"
-    } catch (err: any) {
-      toast.error(err.message)
+      navigate("/setup", { replace: true })
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "修改失败")
     } finally {
       setIsLoading(false)
     }
@@ -144,4 +131,3 @@ export default function Login() {
     </div>
   )
 }
-

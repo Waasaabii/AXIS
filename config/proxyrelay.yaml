@@ -1,73 +1,40 @@
 server:
-  host: 0.0.0.0
-  port: 8787
-  startup_refresh: false
+    host: 0.0.0.0
+    port: 8787
+    startup_refresh: false
 admin:
-  username: admin
-  password: ""
-  password_hash: "scrypt$e7e04281b7b28a2d02ea241ad72a6034$cce8b97bc3c1d62e45a5993ec8d8bd0b187e8c4faad956d3b3106ca97244c5f4d07950f7124abb0ae73a9a24e2eea7f5d95e2500aef659798e6430751c9bb581"
-  session_secret: ""
-  session_ttl_hours: 12
+    username: admin
+    password: ""
+    password_hash: scrypt$9e0dd155ac341fd1897c54cee3908452$359d55ea67c15df9da5124c32db431bf2c9d0783f24f3e9a60d290b8102b2a5f9432e82d0137e1f1586bad7b550a1705d9f0d54d7f4756ac2e8fdb538bb6ee6d
+    session_secret: ""
+    session_ttl_hours: 12
 runtime:
-  workdir: ../runtime
-  mihomo_binary: mihomo
-  external_controller: http://127.0.0.1:9090
-  external_secret: ""
-  render_only: true
+    workdir: ../runtime
+    mihomo_binary: mihomo
+    external_controller: http://127.0.0.1:9090
+    external_secret: ""
+    render_only: true
 subscriptions:
-  - name: airport-main
-    type: mihomo-http
-    url: https://example.com/subscription
-    interval: 3600
-    enabled: true
-    health_check_url: https://www.gstatic.com/generate_204
-    health_check_interval: 300
+    - name: airport-main
+      type: mihomo-http
+      url: https://example.com/subscription
+      interval: 3600
+      enabled: true
+      health_check_url: https://www.gstatic.com/generate_204
+      health_check_interval: 300
+    - name: hitmux
+      type: mihomo-http
+      url: https://hitmux.org/download/l_10_35c28n5n41432.yaml
+      interval: 3600
+      enabled: true
+      health_check_url: https://www.gstatic.com/generate_204
+      health_check_interval: 300
 egress_groups:
-  - name: egress-hk-manual
-    provider: airport-main
-    mode: manual
-    filter: (?i)港|hk|hong ?kong
-    exclude_filter: ""
-  - name: egress-jp-manual
-    provider: airport-main
-    mode: manual
-    filter: (?i)日|jp|japan
-    exclude_filter: ""
-  - name: egress-us-auto
-    provider: airport-main
-    mode: auto
-    filter: (?i)美|us|united states|america
-    exclude_filter: ""
-    health_check_url: https://www.gstatic.com/generate_204
-    interval: 300
-listeners:
-  - name: hk-socks
-    type: socks
-    listen: 0.0.0.0
-    port: 10801
-    udp: true
-    enabled: true
-    users:
-      - username: user_hk
-        password: pass_hk
-    egress_group: egress-hk-manual
-  - name: jp-socks
-    type: socks
-    listen: 0.0.0.0
-    port: 10802
-    udp: true
-    enabled: true
-    users:
-      - username: user_jp
-        password: pass_jp
-    egress_group: egress-jp-manual
-  - name: us-socks
-    type: socks
-    listen: 0.0.0.0
-    port: 10803
-    udp: true
-    enabled: true
-    users:
-      - username: user_us
-        password: pass_us
-    egress_group: egress-us-auto
+    - name: egress-us-auto
+      provider: airport-main
+      mode: auto
+      filter: (?i)美|us|united states|america
+      exclude_filter: ""
+      health_check_url: https://www.gstatic.com/generate_204
+      interval: 300
+listeners: []

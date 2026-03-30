@@ -11,6 +11,8 @@ APP_DIR="${APP_DIR:-${ROOT_DIR}}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/proxyrelay}"
 STATE_DIR="${STATE_DIR:-/var/lib/proxyrelay}"
 RUNTIME_DIR="${STATE_DIR}/runtime"
+BIN_DIR="${APP_DIR}/bin"
+AXIS_BIN="${AXIS_BIN:-${BIN_DIR}/axis}"
 SERVICE_DIR="/etc/systemd/system"
 PROXYRELAY_USER="${PROXYRELAY_USER:-${SUDO_USER:-root}}"
 PROXYRELAY_GROUP="${PROXYRELAY_GROUP:-${PROXYRELAY_USER}}"
@@ -89,6 +91,24 @@ ensure_pnpm() {
   ok "pnpm 已安装: $(pnpm --version)"
 }
 
+ensure_go() {
+  if command -v go >/dev/null 2>&1; then
+    ok "Go 已安装: $(go version | awk '{print $3}')"
+    return
+  fi
+  log "安装 Go ..."
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -y >/dev/null 2>&1 || true
+    apt-get install -y golang-go
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y golang
+  else
+    err "不支持的包管理器，请手动安装 Go >= 1.22"
+    exit 1
+  fi
+  ok "Go 已安装: $(go version | awk '{print $3}')"
+}
+
 ensure_mihomo() {
   if [[ -x "${MIHOMO_BIN}" ]]; then
     ok "mihomo 已安装: $("${MIHOMO_BIN}" -v 2>&1 | head -1)"
@@ -115,6 +135,7 @@ ensure_mihomo() {
 render_template() {
   sed \
     -e "s#/opt/proxyrelay#${APP_DIR}#g" \
+    -e "s#/opt/proxyrelay/bin/axis#${AXIS_BIN}#g" \
     -e "s#/etc/proxyrelay#${CONFIG_DIR}#g" \
     -e "s#/var/lib/proxyrelay#${STATE_DIR}#g" \
     -e "s#/usr/local/bin/mihomo#${MIHOMO_BIN}#g" \
@@ -137,13 +158,13 @@ cmd_install() {
   log "检查系统依赖..."
   ensure_nodejs
   ensure_pnpm
+  ensure_go
   ensure_mihomo
 
-  for cmd in curl ss; do
-    if ! command -v "${cmd}" >/dev/null 2>&1; then
-      apt-get install -y "${cmd}" >/dev/null 2>&1 || true
-    fi
-  done
+  if command -v apt-get >/dev/null 2>&1; then
+    command -v curl >/dev/null 2>&1 || apt-get install -y curl >/dev/null 2>&1 || true
+    command -v ss >/dev/null 2>&1 || apt-get install -y iproute2 >/dev/null 2>&1 || true
+  fi
 
   # ── 2. system user & dirs
   log "配置系统用户与目录..."
@@ -155,7 +176,7 @@ cmd_install() {
   fi
   ok "用户 ${PROXYRELAY_USER} 就绪"
 
-  mkdir -p "${APP_DIR}" "${CONFIG_DIR}" "${RUNTIME_DIR}" "${STATE_DIR}/logs"
+  mkdir -p "${APP_DIR}" "${BIN_DIR}" "${CONFIG_DIR}" "${RUNTIME_DIR}" "${STATE_DIR}/logs"
   chown -R "${PROXYRELAY_USER}:${PROXYRELAY_GROUP}" "${CONFIG_DIR}" "${STATE_DIR}"
   chmod 700 "${CONFIG_DIR}" "${STATE_DIR}"
   ok "目录结构就绪"
@@ -187,18 +208,23 @@ cmd_install() {
   chmod 600 "${CONFIG_FILE}"
   ok "配置就绪: ${CONFIG_FILE}"
 
-  # ── 4. npm deps & frontend build
+  # ── 4. frontend build & go build
   log "安装项目依赖..."
   (cd "${APP_DIR}" && pnpm install --frozen-lockfile >/dev/null 2>&1)
   log "构建前端..."
   (cd "${APP_DIR}" && pnpm run build:ui >/dev/null 2>&1)
+  log "构建 Go 控制面..."
+  (cd "${APP_DIR}" && go build -o "${AXIS_BIN}" ./cmd/axis >/dev/null 2>&1)
+  chmod +x "${AXIS_BIN}"
+  chown "${PROXYRELAY_USER}:${PROXYRELAY_GROUP}" "${AXIS_BIN}"
   chown -R "${PROXYRELAY_USER}:${PROXYRELAY_GROUP}" "${APP_DIR}/frontend/dist" 2>/dev/null || true
   ok "项目构建完成"
 
   # ── 5. render initial runtime config
   log "渲染初始运行态配置..."
   sudo -u "${PROXYRELAY_USER}" env PROXYRELAY_CONFIG="${CONFIG_FILE}" \
-    node "${APP_DIR}/src/index.js" preflight >/dev/null 2>&1 || true
+    AXIS_PUBLIC_DIR="${APP_DIR}/frontend/dist" \
+    "${AXIS_BIN}" preflight >/dev/null 2>&1 || true
   ok "运行态就绪"
 
   # ── 6. install systemd services
@@ -214,6 +240,7 @@ cmd_install() {
   printf "${GREEN}══════════════════════════════════════════════════${NC}\n\n"
   printf "  配置文件 : ${CONFIG_FILE}\n"
   printf "  应用目录 : ${APP_DIR}\n"
+  printf "  AXIS 二进制 : ${AXIS_BIN}\n"
   printf "  运行目录 : ${RUNTIME_DIR}\n"
   printf "  mihomo   : ${MIHOMO_BIN}\n\n"
   printf "  启动服务 : sudo ./service.sh start\n"
@@ -320,6 +347,7 @@ ProxyRelay 服务管理工具
 环境变量:
   MIHOMO_BIN        mihomo 路径       (默认: /usr/local/bin/mihomo)
   MIHOMO_VERSION    mihomo 版本       (默认: v1.19.21)
+  AXIS_BIN          AXIS 二进制路径   (默认: \$APP_DIR/bin/axis)
   APP_DIR           项目目录          (默认: 脚本所在目录)
   CONFIG_DIR        配置目录          (默认: /etc/proxyrelay)
   STATE_DIR         数据目录          (默认: /var/lib/proxyrelay)

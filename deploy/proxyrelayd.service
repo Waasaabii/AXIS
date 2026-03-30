@@ -1,5 +1,5 @@
 [Unit]
-Description=ProxyRelay Control Plane
+Description=AXIS Go Control Plane
 After=network-online.target
 Wants=network-online.target
 
@@ -9,7 +9,8 @@ User=proxyrelay
 Group=proxyrelay
 WorkingDirectory=/opt/proxyrelay
 Environment=PROXYRELAY_CONFIG=/etc/proxyrelay/proxyrelay.yaml
-ExecStart=/usr/bin/env node /opt/proxyrelay/src/index.js serve
+Environment=AXIS_PUBLIC_DIR=/opt/proxyrelay/frontend/dist
+ExecStart=/opt/proxyrelay/bin/axis serve
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true

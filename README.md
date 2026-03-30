@@ -27,7 +27,7 @@
                        ▼
 ┌─────────────────────────────────────────────────┐
 │              AXIS Control Plane                 │
-│  Node.js · 配置管理 · 状态聚合 · 运行态控制    │
+│  Go 原生服务 · 配置管理 · 状态聚合 · 运行态控制 │
 └──────────────────────┬──────────────────────────┘
                        │ 渲染 mihomo.yaml
                        ▼
@@ -307,8 +307,7 @@ sudo ./service.sh uninstall      # 卸载 systemd 服务 (保留配置与数据)
 ### 运行预检
 
 ```bash
-node src/index.js preflight
-node src/index.js preflight --json
+pnpm run preflight
 ```
 
 ---
@@ -330,9 +329,13 @@ AXIS/
 ├── config/
 │   └── proxyrelay.example.yaml  # 配置模板 (首次运行自动生成 proxyrelay.yaml)
 ├── deploy/
-│   ├── install-ubuntu.sh     # Ubuntu 安装脚本 (legacy)
+│   ├── install-ubuntu.sh     # Ubuntu 安装脚本
 │   ├── proxyrelayd.service   # systemd 控制面服务模板
 │   └── mihomo.service        # systemd 数据面服务模板
+├── cmd/
+│   └── axis/                 # Go CLI 入口（serve / preflight / openapi / hash-password）
+├── internal/
+│   └── axis/                 # Go 后端核心实现
 ├── docs/                     # 补充文档
 ├── frontend/                 # React SPA 前端工作区 (@axis/frontend)
 │   └── src/
@@ -342,20 +345,6 @@ AXIS/
 ├── scripts/
 │   └── dev.mjs               # 跨平台本地开发入口
 ├── runtime/                  # 运行时产物（自动生成）
-├── src/
-│   ├── index.js              # 入口与 CLI
-│   ├── server.js             # HTTP 服务器
-│   ├── lib/
-│   │   ├── auth.js           # 认证与哈希
-│   │   ├── config.js         # 配置读写
-│   │   └── pattern.js        # 正则编译
-│   └── services/
-│       ├── control-plane.js  # 核心控制面逻辑
-│       ├── mihomo-controller.js
-│       ├── mihomo-renderer.js
-│       ├── runtime-preflight.js
-│       └── subscription-service.js
-├── test/                     # 测试用例
 ├── package.json
 ├── pnpm-workspace.yaml       # pnpm 工作区配置
 ├── service.sh                # 🔧 系统服务管理 (install/start/stop/restart)
@@ -413,7 +402,7 @@ pnpm run preflight
 
 | 层       | 技术                                            |
 |----------|------------------------------------------------|
-| 控制面   | Node.js (原生 HTTP, ESM)                        |
+| 控制面   | Go 原生 HTTP 服务                               |
 | 数据面   | Mihomo                                          |
 | 前端     | React 19 + Vite + Shadcn UI + Lucide Icons     |
 | 编辑器   | Monaco Editor                                   |

@@ -6,18 +6,21 @@
   "packageManager": "pnpm@10.32.1",
   "description": "AXIS control plane for mihomo-based SOCKS5 relay gateway",
   "scripts": {
-    "build": "pnpm run build:ui",
-    "build:ui": "pnpm --filter @axis/frontend build",
+    "build": "pnpm run build:server && pnpm run build:ui",
+    "build:server": "go build -o ./bin/axis ./cmd/axis",
+    "build:ui": "pnpm run openapi:generate && pnpm --filter @axis/frontend build",
     "dev": "node scripts/dev.mjs",
     "dev:managed": "node scripts/dev.mjs --managed",
-    "dev:server": "node --watch src/index.js serve",
+    "dev:server": "go run ./cmd/axis serve",
     "dev:ui": "pnpm --filter @axis/frontend dev",
-    "hash-password": "node src/index.js hash-password",
+    "hash-password": "go run ./cmd/axis hash-password",
     "lint": "pnpm --filter @axis/frontend lint",
-    "preflight": "node src/index.js preflight",
+    "openapi": "go run ./cmd/axis openapi",
+    "openapi:generate": "node scripts/generate-openapi.mjs",
+    "preflight": "go run ./cmd/axis preflight",
     "preview:ui": "pnpm --filter @axis/frontend preview",
-    "start": "node src/index.js serve",
-    "test": "node --test"
+    "start": "go run ./cmd/axis serve",
+    "test": "go test ./..."
   },
   "dependencies": {
     "yaml": "^2.8.2"

@@ -1,31 +1,51 @@
+import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import AppLayout from './layouts/AppLayout';
-import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
-import Status from './pages/Status';
-import Subscriptions from './pages/Subscriptions';
-import Interfaces from './pages/Interfaces';
-import Listeners from './pages/Listeners';
-import SystemConfig from './pages/SystemConfig';
-import Events from './pages/Events';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Login = lazy(() => import('./pages/Login'));
+const Status = lazy(() => import('./pages/Status'));
+const Subscriptions = lazy(() => import('./pages/Subscriptions'));
+const Interfaces = lazy(() => import('./pages/Interfaces'));
+const Listeners = lazy(() => import('./pages/Listeners'));
+const SystemConfig = lazy(() => import('./pages/SystemConfig'));
+const Events = lazy(() => import('./pages/Events'));
+const Setup = lazy(() => import('./pages/Setup'));
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-zinc-200 bg-white/70 text-sm text-zinc-500">
+      正在加载页面...
+    </div>
+  );
+}
+
+function renderLazyPage(Component: LazyExoticComponent<ComponentType>) {
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <Component />
+    </Suspense>
+  );
+}
 
 const router = createBrowserRouter([
   {
     path: '/login',
-    element: <Login />,
+    element: renderLazyPage(Login),
   },
   {
     path: '/',
     element: <AppLayout />,
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
-      { path: 'dashboard', element: <Dashboard /> },
-      { path: 'status', element: <Status /> },
-      { path: 'subscriptions', element: <Subscriptions /> },
-      { path: 'interfaces', element: <Interfaces /> },
-      { path: 'listeners', element: <Listeners /> },
-      { path: 'system', element: <SystemConfig /> },
-      { path: 'events', element: <Events /> },
+      { path: 'dashboard', element: renderLazyPage(Dashboard) },
+      { path: 'setup', element: renderLazyPage(Setup) },
+      { path: 'status', element: renderLazyPage(Status) },
+      { path: 'subscriptions', element: renderLazyPage(Subscriptions) },
+      { path: 'interfaces', element: renderLazyPage(Interfaces) },
+      { path: 'listeners', element: renderLazyPage(Listeners) },
+      { path: 'system', element: renderLazyPage(SystemConfig) },
+      { path: 'events', element: renderLazyPage(Events) },
     ],
   },
 ]);

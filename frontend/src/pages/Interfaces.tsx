@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import useSWR from 'swr'
-import { fetcher } from '@/services/api'
+import { api, ApiError, type GroupView } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { toast } from 'sonner'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Trash2, Pencil, AlertTriangle, RefreshCw, FolderPlus, HelpCircle, ChevronDown } from 'lucide-react'
@@ -22,6 +23,10 @@ const FILTER_PRESETS = [
   { label: '🇹🇼 台湾', value: '(?i)台|tw|taiwan' },
   { label: '🇰🇷 韩国', value: '(?i)韩|kr|korea|seoul' },
 ]
+
+function formatGroupMode(mode: string) {
+  return mode === 'auto' ? '自动选择' : '手动选择'
+}
 
 function FilterField({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
   return (
@@ -87,10 +92,10 @@ interface GroupForm { name: string; provider: string; mode: string; filter: stri
 const emptyGroupForm: GroupForm = { name: '', provider: '', mode: 'manual', filter: '' }
 
 export default function Interfaces() {
-  const { data: groups, mutate: mutateGroups } = useSWR('/api/groups', fetcher)
-  const { data: configData, mutate: mutateConfig } = useSWR('/api/config', fetcher)
+  const { data: groups, mutate: mutateGroups } = useSWR('/api/groups', api.getGroups)
+  const { data: configData, mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
 
-  const subscriptionNames: string[] = configData?.config?.subscriptions?.map((s: any) => s.name) || []
+  const subscriptionNames = configData?.config.subscriptions.map((subscription) => subscription.name) || []
 
   const mutateAll = () => { mutateGroups(); mutateConfig() }
 
@@ -100,6 +105,8 @@ export default function Interfaces() {
   const [groupForm, setGroupForm] = useState<GroupForm>({ ...emptyGroupForm })
   const [editingGroupName, setEditingGroupName] = useState('')
   const [groupSubmitting, setGroupSubmitting] = useState(false)
+  const [pendingDeleteGroupName, setPendingDeleteGroupName] = useState<string | null>(null)
+  const [deletingGroup, setDeletingGroup] = useState(false)
 
   /* ════════════════════  Group handlers  ════════════════════ */
 
@@ -107,17 +114,16 @@ export default function Interfaces() {
     if (!groupForm.name.trim() || !groupForm.provider) { toast.error('名称和订阅源不能为空'); return }
     setGroupSubmitting(true)
     try {
-      const res = await fetch('/api/egress-groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: groupForm.name.trim(), provider: groupForm.provider, mode: groupForm.mode, filter: groupForm.filter }) })
-      const data = await res.json()
-      if (!data.ok) throw new Error(data.error || '添加失败')
+      const data = await api.addEgressGroup({ name: groupForm.name.trim(), provider: groupForm.provider, mode: groupForm.mode, filter: groupForm.filter })
+      if (!data.ok) throw new Error('添加失败')
       mutateAll()
       setShowAddGroup(false)
       setGroupForm({ ...emptyGroupForm })
       toast.success('出口组已添加')
-    } catch (err: any) { toast.error(err.message || '添加失败') } finally { setGroupSubmitting(false) }
+    } catch (err) { toast.error(err instanceof ApiError ? err.message : '添加失败') } finally { setGroupSubmitting(false) }
   }
 
-  const openEditGroup = (g: any) => {
+  const openEditGroup = (g: GroupView) => {
     setEditingGroupName(g.name)
     setGroupForm({ name: g.name, provider: g.provider, mode: g.mode, filter: g.filter || '' })
     setShowEditGroup(true)
@@ -127,42 +133,40 @@ export default function Interfaces() {
     if (!groupForm.provider) { toast.error('订阅源不能为空'); return }
     setGroupSubmitting(true)
     try {
-      const res = await fetch(`/api/egress-groups/${encodeURIComponent(editingGroupName)}/update`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: groupForm.provider, mode: groupForm.mode, filter: groupForm.filter }) })
-      const data = await res.json()
-      if (!data.ok) throw new Error(data.error || '修改失败')
+      const data = await api.updateEgressGroup(editingGroupName, { provider: groupForm.provider, mode: groupForm.mode, filter: groupForm.filter })
+      if (!data.ok) throw new Error('修改失败')
       mutateAll()
       setShowEditGroup(false)
       toast.success('出口组已更新')
-    } catch (err: any) { toast.error(err.message || '修改失败') } finally { setGroupSubmitting(false) }
+    } catch (err) { toast.error(err instanceof ApiError ? err.message : '修改失败') } finally { setGroupSubmitting(false) }
   }
 
-  const handleDeleteGroup = async (name: string) => {
-    if (!confirm(`确认删除出口组 "${name}"？\n引用该出口组的端口不会被删除，但会变为孤立状态。`)) return
+  const handleDeleteGroup = async () => {
+    if (!pendingDeleteGroupName) return
+    setDeletingGroup(true)
     try {
-      const res = await fetch(`/api/egress-groups/${encodeURIComponent(name)}`, { method: 'DELETE' })
-      const data = await res.json()
-      if (!data.ok) throw new Error(data.error || '删除失败')
+      const data = await api.deleteEgressGroup(pendingDeleteGroupName)
+      if (!data.ok) throw new Error('删除失败')
       mutateAll()
-      toast.success(`出口组 ${name} 已删除`)
-    } catch (err: any) { toast.error(err.message || '删除失败') }
+      toast.success(`出口组 ${pendingDeleteGroupName} 已删除`)
+      setPendingDeleteGroupName(null)
+    } catch (err) { toast.error(err instanceof ApiError ? err.message : '删除失败') } finally { setDeletingGroup(false) }
   }
 
   const handleSelectGroup = async (groupName: string, proxyName: string) => {
     try {
-      const res = await fetch(`/api/groups/${encodeURIComponent(groupName)}/select`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxyName }) })
-      if (!res.ok) throw new Error('切换失败')
+      await api.selectGroup(groupName, { proxyName })
       mutateGroups()
       toast.success(`出口组 ${groupName} 已切换至 ${proxyName}`)
-    } catch { toast.error('切换失败') }
+    } catch (err) { toast.error(err instanceof ApiError ? err.message : '切换失败') }
   }
 
   const handleHealthcheck = async (groupName: string) => {
     try {
-      const res = await fetch(`/api/groups/${encodeURIComponent(groupName)}/healthcheck`, { method: 'POST' })
-      if (!res.ok) throw new Error('健康检查失败')
+      await api.healthcheckGroup(groupName)
       mutateGroups()
       toast.success(`出口组 ${groupName} 已执行健康检查`)
-    } catch { toast.error('健康检查失败') }
+    } catch (err) { toast.error(err instanceof ApiError ? err.message : '健康检查失败') }
   }
 
   /* ════════════════════  Render  ════════════════════ */
@@ -197,7 +201,7 @@ export default function Interfaces() {
               还没有配置任何出口组。
             </p>
           ) : (
-            groups.map((g: any) => (
+            groups.map((g: GroupView) => (
               <Card key={g.name} className={g.providerMissing || g.providerDisabled || g.candidateCount === 0 ? 'border-red-100 bg-gradient-to-b from-white to-red-50/30 shadow-[0_8px_30px_-6px_rgba(239,68,68,0.15)] relative z-10 transition-shadow' : 'shadow-sm'}>
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
@@ -209,7 +213,7 @@ export default function Interfaces() {
                       </CardTitle>
                       <CardDescription className="mt-1">订阅源: {g.provider}</CardDescription>
                     </div>
-                    <div className="px-2 py-1 text-xs rounded-full bg-zinc-100 border text-zinc-600 font-medium">{g.mode}</div>
+                    <div className="px-2 py-1 text-xs rounded-full bg-zinc-100 border text-zinc-600 font-medium">{formatGroupMode(g.mode)}</div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -237,7 +241,7 @@ export default function Interfaces() {
                           <SelectValue placeholder={g.candidateCount === 0 ? "无可用节点匹配" : g.mode === 'auto' ? "自动测速" : "选择节点"} />
                         </SelectTrigger>
                         <SelectContent>
-                          {g.candidates?.map((c: any) => <SelectItem key={c.name} value={c.name}>{c.name} ({c.type})</SelectItem>)}
+                          {g.candidates?.map((c) => <SelectItem key={c.name} value={c.name}>{c.name} ({c.type})</SelectItem>)}
                         </SelectContent>
                       </Select>
                       <Button variant="secondary" size="icon" onClick={() => handleHealthcheck(g.name)} title="健康检查" disabled={g.candidateCount === 0 || g.mode === 'auto'}>
@@ -248,7 +252,7 @@ export default function Interfaces() {
 
                   <div className="flex items-center gap-2 pt-2 border-t">
                     <Button variant="outline" size="sm" onClick={() => openEditGroup(g)}><Pencil className="h-3.5 w-3.5 mr-1" /> 编辑</Button>
-                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteGroup(g.name)}><Trash2 className="h-3.5 w-3.5 mr-1" /> 删除</Button>
+                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setPendingDeleteGroupName(g.name)}><Trash2 className="h-3.5 w-3.5 mr-1" /> 删除</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -287,16 +291,16 @@ export default function Interfaces() {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-72 p-3 text-xs text-zinc-600 leading-relaxed shadow-lg">
-                      <p className="mb-2"><span className="font-semibold text-zinc-900">manual (手动)</span><br/>所有流量固定走您手动选择的节点。</p>
-                      <p><span className="font-semibold text-zinc-900">auto (自动)</span><br/>系统会在后台对节点进行测速，并自动为您切换至当前延迟最低、连通性最好的节点。</p>
+                      <p className="mb-2"><span className="font-semibold text-zinc-900">手动选择</span><br/>所有流量固定走你手动选定的节点。</p>
+                      <p><span className="font-semibold text-zinc-900">自动选择</span><br/>系统会在后台对节点进行测速，并自动切换到当前延迟更低、连通性更好的节点。</p>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
                 <Select value={groupForm.mode} onValueChange={(val: string) => setGroupForm({ ...groupForm, mode: val })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="manual">manual (手动)</SelectItem>
-                    <SelectItem value="auto">auto (自动)</SelectItem>
+                    <SelectItem value="manual">手动选择</SelectItem>
+                    <SelectItem value="auto">自动选择</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -336,16 +340,16 @@ export default function Interfaces() {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-72 p-3 text-xs text-zinc-600 leading-relaxed shadow-lg">
-                      <p className="mb-2"><span className="font-semibold text-zinc-900">manual (手动)</span><br/>所有流量固定走您手动选择的节点。</p>
-                      <p><span className="font-semibold text-zinc-900">auto (自动)</span><br/>系统会在后台对节点进行测速，并自动为您切换至当前延迟最低、连通性最好的节点。</p>
+                      <p className="mb-2"><span className="font-semibold text-zinc-900">手动选择</span><br/>所有流量固定走你手动选定的节点。</p>
+                      <p><span className="font-semibold text-zinc-900">自动选择</span><br/>系统会在后台对节点进行测速，并自动切换到当前延迟更低、连通性更好的节点。</p>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
                 <Select value={groupForm.mode} onValueChange={(val: string) => setGroupForm({ ...groupForm, mode: val })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="manual">manual (手动)</SelectItem>
-                    <SelectItem value="auto">auto (自动)</SelectItem>
+                    <SelectItem value="manual">手动选择</SelectItem>
+                    <SelectItem value="auto">自动选择</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -358,6 +362,19 @@ export default function Interfaces() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteGroupName)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteGroupName(null)
+        }}
+        title="确认删除出口组？"
+        description={pendingDeleteGroupName ? `出口组“${pendingDeleteGroupName}”删除后，引用它的入口不会一起删除，但会暂时失去绑定。` : ''}
+        confirmLabel="删除出口组"
+        destructive
+        confirming={deletingGroup}
+        onConfirm={handleDeleteGroup}
+      />
     </div>
   )
 }

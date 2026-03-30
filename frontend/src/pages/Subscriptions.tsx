@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import useSWR from 'swr'
-import { fetcher } from '@/services/api'
+import { api, ApiError, type ProviderListItem } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,49 +8,57 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { toast } from 'sonner'
 import { RefreshCw, Plus, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 
+function formatSubscriptionType(type: string) {
+  switch (type) {
+    case 'mihomo-http':
+      return 'Mihomo 配置订阅'
+    case 'clash-http':
+      return '节点链接订阅'
+    default:
+      return type
+  }
+}
+
 export default function Subscriptions() {
-  const { data: providers, mutate: mutateProviders } = useSWR('/api/providers', fetcher)
-  const { mutate: mutateConfig } = useSWR('/api/config', fetcher)
+  const { data: providers, mutate: mutateProviders } = useSWR('/api/providers', api.getProviders)
+  const { mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
 
   const [showAddSub, setShowAddSub] = useState(false)
   const [subForm, setSubForm] = useState({ name: '', url: '', type: 'mihomo-http', interval: '3600' })
   const [addingSubscription, setAddingSubscription] = useState(false)
+  const [pendingDeleteName, setPendingDeleteName] = useState<string | null>(null)
+  const [deletingSubscription, setDeletingSubscription] = useState(false)
 
   const mutateAll = () => { mutateProviders(); mutateConfig() }
 
   const handleRefreshProvider = async (name: string) => {
     try {
-      const res = await fetch(`/api/providers/${encodeURIComponent(name)}/refresh`, { method: 'POST' })
-      const data = await res.json()
+      const data = await api.refreshProvider(name)
       mutateProviders()
       if (data.ok) {
         toast.success(`订阅 ${name} 已刷新，节点数: ${data.provider?.nodeCount ?? 0}`)
       } else {
         toast.error(`刷新失败: ${data.error || '未知错误'}`)
       }
-    } catch {
-      toast.error('刷新失败')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '刷新失败')
     }
   }
 
   const handleToggleSubscription = async (name: string, enabled: boolean) => {
     try {
-      const res = await fetch(`/api/subscriptions/${encodeURIComponent(name)}/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
-      })
-      const data = await res.json()
-      if (!data.ok) throw new Error(data.error || '操作失败')
+      const data = await api.toggleSubscription(name, { enabled })
+      if (!data.ok) throw new Error('操作失败')
       mutateAll()
       toast.success(enabled ? `订阅 ${name} 已启用` : `订阅 ${name} 已停用`)
-    } catch (err: any) {
-      toast.error(err.message || '操作失败')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '操作失败')
     }
   }
 
@@ -61,39 +69,37 @@ export default function Subscriptions() {
     }
     setAddingSubscription(true)
     try {
-      const res = await fetch('/api/subscriptions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: subForm.name.trim(),
-          url: subForm.url.trim(),
-          type: subForm.type,
-          interval: Number(subForm.interval) || 3600
-        })
+      const data = await api.addSubscription({
+        name: subForm.name.trim(),
+        url: subForm.url.trim(),
+        type: subForm.type,
+        interval: Number(subForm.interval) || 3600,
       })
-      const data = await res.json()
-      if (!data.ok) throw new Error(data.error || '添加失败')
+      if (!data.ok) throw new Error('添加失败')
       mutateAll()
       setShowAddSub(false)
       setSubForm({ name: '', url: '', type: 'mihomo-http', interval: '3600' })
       toast.success('订阅已添加并正在拉取节点...')
-    } catch (err: any) {
-      toast.error(err.message || '添加订阅失败')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '添加订阅失败')
     } finally {
       setAddingSubscription(false)
     }
   }
 
-  const handleDeleteSubscription = async (name: string) => {
-    if (!confirm(`确认删除订阅 "${name}"？\n关联的出口组和接口不会被删除，但会变为孤立状态。`)) return
+  const handleDeleteSubscription = async () => {
+    if (!pendingDeleteName) return
+    setDeletingSubscription(true)
     try {
-      const res = await fetch(`/api/subscriptions/${encodeURIComponent(name)}`, { method: 'DELETE' })
-      const data = await res.json()
-      if (!data.ok) throw new Error(data.error || '删除失败')
+      const data = await api.deleteSubscription(pendingDeleteName)
+      if (!data.ok) throw new Error('删除失败')
       mutateAll()
-      toast.success(`订阅 ${name} 已删除`)
-    } catch (err: any) {
-      toast.error(err.message || '删除订阅失败')
+      toast.success(`订阅 ${pendingDeleteName} 已删除`)
+      setPendingDeleteName(null)
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '删除订阅失败')
+    } finally {
+      setDeletingSubscription(false)
     }
   }
 
@@ -112,8 +118,8 @@ export default function Subscriptions() {
       </div>
 
       <div className="text-xs text-zinc-500 bg-zinc-50 border rounded-lg px-4 py-2">
-        <strong>mihomo-http</strong> — 适用于返回 Clash/Mihomo YAML 格式的订阅 &nbsp;|&nbsp;
-        <strong>clash-http</strong> — 适用于返回 base64 编码 URI 列表的订阅
+        <strong>Mihomo 配置订阅</strong> — 适用于直接返回 Mihomo 配置内容的订阅链接 &nbsp;|&nbsp;
+        <strong>节点链接订阅</strong> — 适用于返回节点链接列表的订阅
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -124,7 +130,7 @@ export default function Subscriptions() {
             还没有配置任何订阅，点击上方按钮添加。
           </p>
         ) : (
-          providers.map((p: any) => (
+          providers.map((p: ProviderListItem) => (
             <Card key={p.name} className={!p.enabled ? 'opacity-60' : ''}>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
@@ -146,7 +152,7 @@ export default function Subscriptions() {
                 <div className="flex gap-2 text-xs text-zinc-500 mb-4 flex-wrap">
                   <span className="bg-zinc-100 px-2 py-1 rounded">节点: {p.nodeCount}</span>
                   <span className="bg-zinc-100 px-2 py-1 rounded">间隔: {p.interval}s</span>
-                  <span className="bg-zinc-100 px-2 py-1 rounded">{p.type}</span>
+                  <span className="bg-zinc-100 px-2 py-1 rounded">{formatSubscriptionType(p.type)}</span>
                 </div>
                 <div className="text-xs space-y-1 mb-4 text-zinc-600">
                   <p>刷新: {p.refreshedAt ? format(new Date(p.refreshedAt), 'PP HH:mm:ss', { locale: zhCN }) : '未刷新'}</p>
@@ -156,7 +162,7 @@ export default function Subscriptions() {
                   <Button variant="outline" size="sm" onClick={() => handleRefreshProvider(p.name)} disabled={!p.enabled}>
                     <RefreshCw className="h-3.5 w-3.5 mr-1" /> 刷新订阅
                   </Button>
-                  <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteSubscription(p.name)}>
+                  <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setPendingDeleteName(p.name)}>
                     <Trash2 className="h-3.5 w-3.5 mr-1" /> 删除
                   </Button>
                 </div>
@@ -188,8 +194,8 @@ export default function Subscriptions() {
                 <Select value={subForm.type} onValueChange={(val: string) => setSubForm({ ...subForm, type: val })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mihomo-http">mihomo-http (YAML格式)</SelectItem>
-                    <SelectItem value="clash-http">clash-http (base64/URI)</SelectItem>
+                    <SelectItem value="mihomo-http">Mihomo 配置订阅</SelectItem>
+                    <SelectItem value="clash-http">节点链接订阅</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -207,6 +213,19 @@ export default function Subscriptions() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteName)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteName(null)
+        }}
+        title="确认删除订阅？"
+        description={pendingDeleteName ? `订阅“${pendingDeleteName}”删除后，关联的出口组和入口不会一起删除，但会暂时失去绑定。` : ''}
+        confirmLabel="删除订阅"
+        destructive
+        confirming={deletingSubscription}
+        onConfirm={handleDeleteSubscription}
+      />
     </div>
   )
 }
