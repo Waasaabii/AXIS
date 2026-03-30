@@ -159,6 +159,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case pathname == "/api/groups" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetGroups())
 			return
+		case pathname == "/api/landing-proxies" && method == http.MethodGet:
+			writeJSON(w, 200, s.service.GetLandingProxies())
+			return
 		case pathname == "/api/listeners" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetListeners())
 			return
@@ -213,6 +216,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			response, status := s.service.AddEgressGroup(payload)
+			writeJSON(w, status, response)
+			return
+		case pathname == "/api/landing-proxies" && method == http.MethodPost:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.AddLandingProxy(payload)
 			writeJSON(w, status, response)
 			return
 		case pathname == "/api/listeners" && method == http.MethodPost:
@@ -295,6 +307,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(pathname, "/api/egress-groups/") && method == http.MethodDelete {
 			name := strings.TrimPrefix(pathname, "/api/egress-groups/")
 			response, status := s.service.RemoveEgressGroup(name)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/landing-proxies/") && strings.HasSuffix(pathname, "/update") && method == http.MethodPut {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/landing-proxies/"), "/update")
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.UpdateLandingProxy(name, payload)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/landing-proxies/") && method == http.MethodDelete {
+			name := strings.TrimPrefix(pathname, "/api/landing-proxies/")
+			response, status := s.service.RemoveLandingProxy(name)
 			writeJSON(w, status, response)
 			return
 		}

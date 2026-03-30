@@ -1,8 +1,12 @@
 package axis
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -95,5 +99,71 @@ func TestActivateMihomoVersion(t *testing.T) {
 	}
 	if service.config.Runtime.MihomoBinary != binaryPath {
 		t.Fatalf("expected config runtime binary to be updated, got %s", service.config.Runtime.MihomoBinary)
+	}
+}
+
+func TestSelectGroupWithLandingProxyUsesSourceGroup(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir)
+	service, err := NewService(configPath)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	defer service.Close()
+
+	response, status := service.AddLandingProxy(map[string]any{
+		"name":    "jp-egress",
+		"type":    "socks5",
+		"server":  "landing.example.com",
+		"port":    443,
+		"enabled": true,
+	})
+	if status != 200 || response["ok"] != true {
+		t.Fatalf("AddLandingProxy() status = %d response = %#v", status, response)
+	}
+
+	response, status = service.UpdateEgressGroup("egress-hk-manual", map[string]any{
+		"landing_proxy": "jp-egress",
+	})
+	if status != 200 || response["ok"] != true {
+		t.Fatalf("UpdateEgressGroup() status = %d response = %#v", status, response)
+	}
+
+	service.state.Providers["airport-main"] = ProviderRecord{
+		Provider: "airport-main",
+		Nodes: []NodeInfo{
+			{Name: "HK 01", Type: "ss", Server: "1.1.1.1", Port: 443},
+		},
+	}
+
+	var runtimeGroupName string
+	var runtimeProxyName string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		runtimeGroupName = strings.TrimPrefix(r.URL.Path, "/proxies/")
+		body, _ := io.ReadAll(r.Body)
+		runtimeProxyName = string(body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+	service.controller = NewMihomoControllerAdapter(RuntimeConfig{
+		ExternalController: server.URL,
+		RenderOnly:         false,
+	})
+
+	result, status := service.SelectGroup("egress-hk-manual", "HK 01 -> jp-egress")
+	if status != 200 {
+		t.Fatalf("SelectGroup() status = %d result = %#v", status, result)
+	}
+	if runtimeGroupName != relaySourceGroupName("egress-hk-manual") {
+		t.Fatalf("expected runtime group %q, got %q", relaySourceGroupName("egress-hk-manual"), runtimeGroupName)
+	}
+	if !strings.Contains(runtimeProxyName, `"name":"HK 01"`) {
+		t.Fatalf("expected runtime proxy payload to target source node, got %s", runtimeProxyName)
+	}
+	if service.state.GroupSelections["egress-hk-manual"] != "HK 01 -> jp-egress" {
+		t.Fatalf("unexpected stored selection: %q", service.state.GroupSelections["egress-hk-manual"])
 	}
 }

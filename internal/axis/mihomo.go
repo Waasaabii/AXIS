@@ -168,6 +168,10 @@ func buildProvider(subscription Subscription) map[string]any {
 }
 
 func buildGroup(group EgressGroup) map[string]any {
+	return buildRuntimeGroup(group, group.Name)
+}
+
+func buildRuntimeGroup(group EgressGroup, name string) map[string]any {
 	mode := firstNonEmpty(group.Mode, "manual")
 	groupType := "select"
 	if mode == "fallback" {
@@ -178,7 +182,7 @@ func buildGroup(group EgressGroup) map[string]any {
 	}
 
 	base := map[string]any{
-		"name": group.Name,
+		"name": name,
 		"type": groupType,
 		"use":  []string{group.Provider},
 	}
@@ -195,6 +199,39 @@ func buildGroup(group EgressGroup) map[string]any {
 		base["timeout"] = 5000
 	}
 	return base
+}
+
+func buildRelayGroup(group EgressGroup) map[string]any {
+	return map[string]any{
+		"name":    group.Name,
+		"type":    "relay",
+		"proxies": []string{relaySourceGroupName(group.Name), landingProxyRuntimeName(group.LandingProxy)},
+	}
+}
+
+func buildLandingProxy(landing LandingProxy) map[string]any {
+	proxy := map[string]any{
+		"name":   landingProxyRuntimeName(landing.Name),
+		"type":   firstNonEmpty(landing.Type, "socks5"),
+		"server": landing.Server,
+		"port":   landing.Port,
+	}
+	if landing.Username != "" {
+		proxy["username"] = landing.Username
+	}
+	if landing.Password != "" {
+		proxy["password"] = landing.Password
+	}
+	if landing.TLS {
+		proxy["tls"] = true
+	}
+	if landing.SNI != "" {
+		proxy["sni"] = landing.SNI
+	}
+	if landing.SkipCertVerify {
+		proxy["skip-cert-verify"] = true
+	}
+	return proxy
 }
 
 func buildListener(listener Listener) map[string]any {
@@ -217,10 +254,29 @@ func RenderMihomoConfig(config *Config) (string, error) {
 		}
 	}
 
+	enabledLandings := map[string]LandingProxy{}
+	proxies := make([]map[string]any, 0, len(config.LandingProxies))
+	for _, landing := range config.LandingProxies {
+		if !landing.Enabled {
+			continue
+		}
+		enabledLandings[landing.Name] = landing
+		proxies = append(proxies, buildLandingProxy(landing))
+	}
+
 	validGroups := map[string]struct{}{}
-	groups := make([]map[string]any, 0, len(config.EgressGroups))
+	groups := make([]map[string]any, 0, len(config.EgressGroups)*2)
 	for _, group := range config.EgressGroups {
 		if _, ok := enabledProviders[group.Provider]; !ok {
+			continue
+		}
+		if group.LandingProxy != "" {
+			if _, ok := enabledLandings[group.LandingProxy]; !ok {
+				continue
+			}
+			groups = append(groups, buildRuntimeGroup(group, relaySourceGroupName(group.Name)))
+			groups = append(groups, buildRelayGroup(group))
+			validGroups[group.Name] = struct{}{}
 			continue
 		}
 		validGroups[group.Name] = struct{}{}
@@ -256,6 +312,7 @@ func RenderMihomoConfig(config *Config) (string, error) {
 			"store-selected": true,
 			"store-fake-ip":  false,
 		},
+		"proxies":         proxies,
 		"proxy-providers": providers,
 		"proxy-groups":    groups,
 		"listeners":       listeners,

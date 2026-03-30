@@ -22,6 +22,9 @@ export type ProviderRefreshResponse = Schemas["ProviderRefreshResponse"]
 export type GroupView = Schemas["GroupView"]
 export type GroupMutationResponse = Schemas["GroupMutationResponse"]
 export type SelectGroupRequest = Schemas["SelectGroupRequest"]
+export type LandingProxyView = Schemas["LandingProxyView"]
+export type AddLandingProxyRequest = Schemas["AddLandingProxyRequest"]
+export type UpdateLandingProxyRequest = Schemas["UpdateLandingProxyRequest"]
 export type ListenerUser = Schemas["ListenerUser"]
 export type ListenerView = Schemas["ListenerView"]
 export type AddListenerRequest = Schemas["AddListenerRequest"]
@@ -93,6 +96,7 @@ export const api = {
   refreshProvider: (name: string) =>
     requestJson<ProviderRefreshResponse>(`/api/providers/${encodeURIComponent(name)}/refresh`, { method: "POST" }),
   getGroups: () => requestJson<GroupView[]>("/api/groups"),
+  getLandingProxies: () => requestJson<LandingProxyView[]>("/api/landing-proxies"),
   selectGroup: (groupName: string, body: SelectGroupRequest) =>
     requestJson<GroupMutationResponse>(`/api/groups/${encodeURIComponent(groupName)}/select`, {
       method: "POST",
@@ -100,6 +104,15 @@ export const api = {
     }),
   healthcheckGroup: (groupName: string) =>
     requestJson<GroupMutationResponse>(`/api/groups/${encodeURIComponent(groupName)}/healthcheck`, { method: "POST" }),
+  addLandingProxy: (body: AddLandingProxyRequest) =>
+    requestJson<SaveConfigResponse>("/api/landing-proxies", { method: "POST", body: JSON.stringify(body) }),
+  updateLandingProxy: (name: string, body: UpdateLandingProxyRequest) =>
+    requestJson<SaveConfigResponse>(`/api/landing-proxies/${encodeURIComponent(name)}/update`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteLandingProxy: (name: string) =>
+    requestJson<SaveConfigResponse>(`/api/landing-proxies/${encodeURIComponent(name)}`, { method: "DELETE" }),
   getListeners: () => requestJson<ListenerView[]>("/api/listeners"),
   addListener: (body: AddListenerRequest) =>
     requestJson<SaveConfigResponse>("/api/listeners", { method: "POST", body: JSON.stringify(body) }),

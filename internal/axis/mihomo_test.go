@@ -52,7 +52,7 @@ func TestReloadConfig(t *testing.T) {
 
 func TestRenderMihomoConfig(t *testing.T) {
 	output, err := RenderMihomoConfig(&Config{
-		Runtime: RuntimeConfig{ExternalController: "http://127.0.0.1:11235", ExternalSecret: "secret"},
+		Runtime:       RuntimeConfig{ExternalController: "http://127.0.0.1:11235", ExternalSecret: "secret"},
 		Subscriptions: []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true, HealthCheckURL: "https://www.gstatic.com/generate_204", HealthCheckInterval: 300}},
 		EgressGroups:  []EgressGroup{{Name: "egress-hk-manual", Provider: "airport-main", Mode: "manual", Filter: "(?i)港"}},
 		Listeners:     []Listener{{Name: "hk-socks", Type: "socks", Listen: "0.0.0.0", Port: 10801, UDP: true, Enabled: true, EgressGroup: "egress-hk-manual"}},
@@ -62,5 +62,39 @@ func TestRenderMihomoConfig(t *testing.T) {
 	}
 	if !strings.Contains(output, "proxy-providers:") || !strings.Contains(output, "listeners:") || !strings.Contains(output, "hk-socks") {
 		t.Fatalf("unexpected rendered config:\n%s", output)
+	}
+}
+
+func TestRenderMihomoConfigWithLandingProxy(t *testing.T) {
+	output, err := RenderMihomoConfig(&Config{
+		Runtime: RuntimeConfig{ExternalController: "http://127.0.0.1:11235", ExternalSecret: "secret"},
+		Subscriptions: []Subscription{
+			{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true, HealthCheckURL: "https://www.gstatic.com/generate_204", HealthCheckInterval: 300},
+		},
+		LandingProxies: []LandingProxy{
+			{Name: "jp-egress", Type: "socks5", Server: "landing.example.com", Port: 443, Username: "relay", Password: "secret", Enabled: true},
+		},
+		EgressGroups: []EgressGroup{
+			{Name: "egress-hk-manual", Provider: "airport-main", Mode: "manual", Filter: "(?i)港", LandingProxy: "jp-egress"},
+		},
+		Listeners: []Listener{
+			{Name: "hk-socks", Type: "socks", Listen: "0.0.0.0", Port: 10801, UDP: true, Enabled: true, EgressGroup: "egress-hk-manual"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RenderMihomoConfig() error = %v", err)
+	}
+	for _, expected := range []string{
+		"proxies:",
+		"name: landing::jp-egress",
+		"type: relay",
+		"name: egress-hk-manual::source",
+		"name: egress-hk-manual",
+		"landing::jp-egress",
+		"proxy: egress-hk-manual",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("rendered config missing %q:\n%s", expected, output)
+		}
 	}
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import useSWR from 'swr'
-import { api, ApiError, type GroupView } from '@/services/api'
+import { api, ApiError, type GroupView, type LandingProxyView } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,9 +11,10 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyStateCard } from '@/components/EmptyStateCard'
 import { NoticeCard } from '@/components/NoticeCard'
 import { PageHeader } from '@/components/PageHeader'
+import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Trash2, Pencil, AlertTriangle, RefreshCw, FolderPlus, HelpCircle, ChevronDown, Network } from 'lucide-react'
+import { Trash2, Pencil, AlertTriangle, RefreshCw, FolderPlus, HelpCircle, ChevronDown, Network, Route, Plus } from 'lucide-react'
 
 /* ── Filter presets ── */
 const FILTER_PRESETS = [
@@ -29,6 +30,24 @@ const FILTER_PRESETS = [
 
 function formatGroupMode(mode: string) {
   return mode === 'auto' ? '自动选择' : '手动选择'
+}
+
+const NO_LANDING_VALUE = '__direct__'
+
+function landingSelectValue(value?: string) {
+  return value && value.trim() ? value : NO_LANDING_VALUE
+}
+
+function buildRouteSummary(group: GroupView) {
+  return group.routeSummary || `${group.current || group.name} -> 公网`
+}
+
+function buildGroupWarning(group: GroupView) {
+  if (group.providerMissing) return '这条线路原先使用的订阅已经不存在了，请重新选择数据来源。'
+  if (group.providerDisabled) return '这条线路依赖的订阅目前被停用了，恢复启用后这里会重新可用。'
+  if (group.landingMissing) return '绑定的落地节点已经被删除了，请重新指定最终出口。'
+  if (group.landingDisabled) return '绑定的落地节点目前已停用，这条线路暂时不会继续往下转发。'
+  return ''
 }
 
 function FilterField({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
@@ -91,16 +110,52 @@ function FilterField({ value, onChange, disabled }: { value: string; onChange: (
 }
 
 /* ── Egress Group form ── */
-interface GroupForm { name: string; provider: string; mode: string; filter: string }
-const emptyGroupForm: GroupForm = { name: '', provider: '', mode: 'manual', filter: '' }
+interface GroupForm { name: string; provider: string; mode: string; filter: string; landing_proxy: string }
+const emptyGroupForm: GroupForm = { name: '', provider: '', mode: 'manual', filter: '', landing_proxy: '' }
+
+interface LandingForm {
+  name: string
+  type: string
+  server: string
+  port: string
+  username: string
+  password: string
+  tls: boolean
+  sni: string
+  skip_cert_verify: boolean
+  enabled: boolean
+}
+
+const emptyLandingForm: LandingForm = {
+  name: '',
+  type: 'socks5',
+  server: '',
+  port: '',
+  username: '',
+  password: '',
+  tls: false,
+  sni: '',
+  skip_cert_verify: false,
+  enabled: true,
+}
 
 export default function Interfaces() {
   const { data: groups, mutate: mutateGroups } = useSWR('/api/groups', api.getGroups)
+  const { data: landingProxies, mutate: mutateLandingProxies } = useSWR('/api/landing-proxies', api.getLandingProxies)
   const { data: configData, mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
 
   const subscriptionNames = configData?.config.subscriptions.map((subscription) => subscription.name) || []
 
-  const mutateAll = () => { mutateGroups(); mutateConfig() }
+  const mutateAll = () => { mutateGroups(); mutateLandingProxies(); mutateConfig() }
+
+  /* ── Landing proxy state ── */
+  const [showAddLanding, setShowAddLanding] = useState(false)
+  const [showEditLanding, setShowEditLanding] = useState(false)
+  const [landingForm, setLandingForm] = useState<LandingForm>({ ...emptyLandingForm })
+  const [editingLandingName, setEditingLandingName] = useState('')
+  const [landingSubmitting, setLandingSubmitting] = useState(false)
+  const [pendingDeleteLandingName, setPendingDeleteLandingName] = useState<string | null>(null)
+  const [deletingLanding, setDeletingLanding] = useState(false)
 
   /* ── Group state ── */
   const [showAddGroup, setShowAddGroup] = useState(false)
@@ -113,11 +168,116 @@ export default function Interfaces() {
 
   /* ════════════════════  Group handlers  ════════════════════ */
 
+  const openAddLanding = () => {
+    setLandingForm({ ...emptyLandingForm })
+    setShowAddLanding(true)
+  }
+
+  const openEditLanding = (landing: LandingProxyView) => {
+    setEditingLandingName(landing.name)
+    setLandingForm({
+      name: landing.name,
+      type: landing.type || 'socks5',
+      server: landing.server || '',
+      port: String(landing.port || ''),
+      username: landing.username || '',
+      password: landing.password || '',
+      tls: Boolean(landing.tls),
+      sni: landing.sni || '',
+      skip_cert_verify: Boolean(landing.skipCertVerify),
+      enabled: landing.enabled !== false,
+    })
+    setShowEditLanding(true)
+  }
+
+  const handleAddLanding = async () => {
+    if (!landingForm.name.trim() || !landingForm.server.trim() || !landingForm.port) {
+      toast.error('落地节点名称、地址和端口都需要填写。')
+      return
+    }
+    setLandingSubmitting(true)
+    try {
+      const data = await api.addLandingProxy({
+        name: landingForm.name.trim(),
+        type: landingForm.type,
+        server: landingForm.server.trim(),
+        port: Number(landingForm.port),
+        username: landingForm.username.trim() || undefined,
+        password: landingForm.password.trim() || undefined,
+        tls: landingForm.tls,
+        sni: landingForm.sni.trim() || undefined,
+        skip_cert_verify: landingForm.skip_cert_verify,
+        enabled: landingForm.enabled,
+      })
+      if (!data.ok) throw new Error('添加失败')
+      mutateAll()
+      setShowAddLanding(false)
+      setLandingForm({ ...emptyLandingForm })
+      toast.success('落地节点已创建。')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '添加失败')
+    } finally {
+      setLandingSubmitting(false)
+    }
+  }
+
+  const handleEditLanding = async () => {
+    if (!landingForm.server.trim() || !landingForm.port) {
+      toast.error('地址和端口都需要填写。')
+      return
+    }
+    setLandingSubmitting(true)
+    try {
+      const data = await api.updateLandingProxy(editingLandingName, {
+        type: landingForm.type,
+        server: landingForm.server.trim(),
+        port: Number(landingForm.port),
+        username: landingForm.username.trim(),
+        password: landingForm.password.trim(),
+        tls: landingForm.tls,
+        sni: landingForm.sni.trim(),
+        skip_cert_verify: landingForm.skip_cert_verify,
+        enabled: landingForm.enabled,
+      })
+      if (!data.ok) throw new Error('修改失败')
+      mutateAll()
+      setShowEditLanding(false)
+      setLandingForm({ ...emptyLandingForm })
+      toast.success('落地节点已更新。')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '修改失败')
+    } finally {
+      setLandingSubmitting(false)
+    }
+  }
+
+  const handleDeleteLanding = async () => {
+    if (!pendingDeleteLandingName) return
+    setDeletingLanding(true)
+    try {
+      const data = await api.deleteLandingProxy(pendingDeleteLandingName)
+      if (!data.ok) throw new Error('删除失败')
+      mutateAll()
+      toast.success(`已删除落地节点“${pendingDeleteLandingName}”。`)
+      setPendingDeleteLandingName(null)
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '删除失败')
+    } finally {
+      setDeletingLanding(false)
+    }
+  }
+
   const handleAddGroup = async () => {
     if (!groupForm.name.trim() || !groupForm.provider) { toast.error('名称和订阅源不能为空'); return }
     setGroupSubmitting(true)
     try {
-      const data = await api.addEgressGroup({ name: groupForm.name.trim(), provider: groupForm.provider, mode: groupForm.mode, filter: groupForm.filter })
+      const data = await api.addEgressGroup({
+        name: groupForm.name.trim(),
+        provider: groupForm.provider,
+        mode: groupForm.mode,
+        filter: groupForm.filter,
+        landing_proxy: groupForm.landing_proxy || undefined,
+      })
       if (!data.ok) throw new Error('添加失败')
       mutateAll()
       setShowAddGroup(false)
@@ -128,7 +288,7 @@ export default function Interfaces() {
 
   const openEditGroup = (g: GroupView) => {
     setEditingGroupName(g.name)
-    setGroupForm({ name: g.name, provider: g.provider, mode: g.mode, filter: g.filter || '' })
+    setGroupForm({ name: g.name, provider: g.provider, mode: g.mode, filter: g.filter || '', landing_proxy: g.landingProxy || '' })
     setShowEditGroup(true)
   }
 
@@ -136,7 +296,12 @@ export default function Interfaces() {
     if (!groupForm.provider) { toast.error('订阅源不能为空'); return }
     setGroupSubmitting(true)
     try {
-      const data = await api.updateEgressGroup(editingGroupName, { provider: groupForm.provider, mode: groupForm.mode, filter: groupForm.filter })
+      const data = await api.updateEgressGroup(editingGroupName, {
+        provider: groupForm.provider,
+        mode: groupForm.mode,
+        filter: groupForm.filter,
+        landing_proxy: groupForm.landing_proxy,
+      })
       if (!data.ok) throw new Error('修改失败')
       mutateAll()
       setShowEditGroup(false)
@@ -178,21 +343,113 @@ export default function Interfaces() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Routes"
-        title="把节点整理成好理解的出口线路"
-        description="你可以把同一份订阅里的节点按地区或用途分成不同线路。后面创建本地入口时，只需要选这条线路，不用再面对整份节点列表。"
+        title="把节点和最终出口整理成一条可复用路径"
+        description="先决定最终从哪里出公网，再把订阅节点整理成出口线路。这样后面给设备开本地入口时，只需要选一条已经整理好的路径。"
         actions={
-          <Button onClick={() => { setGroupForm({ ...emptyGroupForm }); setShowAddGroup(true) }} disabled={subscriptionNames.length === 0}>
-            <FolderPlus className="h-4 w-4" />
-            添加出口线路
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={openAddLanding}>
+              <Plus className="h-4 w-4" />
+              添加落地节点
+            </Button>
+            <Button onClick={() => { setGroupForm({ ...emptyGroupForm }); setShowAddGroup(true) }} disabled={subscriptionNames.length === 0}>
+              <FolderPlus className="h-4 w-4" />
+              添加出口线路
+            </Button>
+          </div>
         }
       />
 
       <NoticeCard
-        icon={<Network className="h-4 w-4" />}
-        title="什么时候需要新建一条出口线路"
-        description="当你想把节点按地区、用途或稳定性分开管理时，就值得新建一条线路。比如“香港日常”“日本流媒体”“自动选择”这类名字，都比直接面对原始节点列表更好用。"
+        icon={<Route className="h-4 w-4" />}
+        title="先想清楚你要管理的是“路径”"
+        description="一条完整路径通常是“订阅节点 -> 可选的落地节点 -> 公网”。如果你想让不同线路最终落到不同 IP，就先创建落地节点；如果只想直接出公网，也可以保持直连。"
       />
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">落地节点</h2>
+            <p className="text-sm text-zinc-500">这里定义最终出口。线路绑定它以后，流量会先走你选中的订阅节点，再从这里出公网。</p>
+          </div>
+          <Button variant="outline" onClick={openAddLanding}>
+            <Plus className="h-4 w-4" />
+            添加落地节点
+          </Button>
+        </div>
+
+        {!landingProxies ? (
+          <p className="text-sm text-zinc-500">加载中...</p>
+        ) : landingProxies.length === 0 ? (
+          <EmptyStateCard
+            icon={<Route className="h-5 w-5" />}
+            title="还没有任何落地节点"
+            description="如果你想让不同线路最终落到不同公网 IP，就先在这里添加固定的中转或出口节点。没有这一步，线路会直接出公网。"
+            action={
+              <Button variant="outline" onClick={openAddLanding}>
+                <Plus className="h-4 w-4" />
+                添加第一个落地节点
+              </Button>
+            }
+          />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {landingProxies.map((landing) => (
+              <Card key={landing.name} className={landing.enabled ? 'shadow-sm' : 'border-amber-200 bg-amber-50/30'}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        {landing.name}
+                        {!landing.enabled && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal">已停用</span>}
+                      </CardTitle>
+                      <CardDescription className="mt-1">{landing.server}:{landing.port}</CardDescription>
+                    </div>
+                    <div className="px-2 py-1 text-xs rounded-full bg-zinc-100 border text-zinc-600 font-medium uppercase">
+                      {landing.type}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+                    <span className="bg-zinc-100 px-2 py-1 rounded">已绑定线路 {landing.routeCount}</span>
+                    <span className="bg-zinc-100 px-2 py-1 rounded">{landing.username ? '需要账号密码' : '无需账号密码'}</span>
+                    <span className="bg-zinc-100 px-2 py-1 rounded">{landing.tls ? 'TLS 已开启' : '纯明文连接'}</span>
+                  </div>
+
+                  {landing.inUseBy.length > 0 ? (
+                    <div className="rounded-lg border bg-zinc-50 p-3 text-sm space-y-2">
+                      <p className="text-zinc-500">正在使用这条落地路径的出口线路</p>
+                      <div className="flex flex-wrap gap-2">
+                        {landing.inUseBy.map((groupName) => (
+                          <span key={groupName} className="rounded-full border bg-white px-2 py-1 text-xs text-zinc-700">
+                            {groupName}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border bg-zinc-50 p-3 text-sm text-zinc-500">
+                      这条落地节点还没有被任何出口线路使用。
+                    </div>
+                  )}
+
+                  {!landing.enabled && (
+                    <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 p-2 rounded">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <p>停用后，绑定它的线路不会继续往这个节点转发，相关本地入口会进入降级状态。</p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-2 border-t">
+                    <Button variant="outline" size="sm" onClick={() => openEditLanding(landing)}><Pencil className="h-3.5 w-3.5 mr-1" /> 编辑落地节点</Button>
+                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setPendingDeleteLandingName(landing.name)}><Trash2 className="h-3.5 w-3.5 mr-1" /> 删除落地节点</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* ──────── Egress Groups Section ──────── */}
       <section className="space-y-4">
@@ -227,7 +484,7 @@ export default function Interfaces() {
             />
           ) : (
             groups.map((g: GroupView) => (
-              <Card key={g.name} className={g.providerMissing || g.providerDisabled || g.candidateCount === 0 ? 'border-red-100 bg-gradient-to-b from-white to-red-50/30 shadow-[0_8px_30px_-6px_rgba(239,68,68,0.15)] relative z-10 transition-shadow' : 'shadow-sm'}>
+              <Card key={g.name} className={g.providerMissing || g.providerDisabled || g.landingMissing || g.landingDisabled || g.candidateCount === 0 ? 'border-red-100 bg-gradient-to-b from-white to-red-50/30 shadow-[0_8px_30px_-6px_rgba(239,68,68,0.15)] relative z-10 transition-shadow' : 'shadow-sm'}>
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -235,6 +492,8 @@ export default function Interfaces() {
                         {g.name}
                         {g.providerMissing && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-normal">订阅已删除</span>}
                         {g.providerDisabled && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal">订阅已停用</span>}
+                        {g.landingMissing && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-normal">落地已删除</span>}
+                        {g.landingDisabled && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal">落地已停用</span>}
                       </CardTitle>
                       <CardDescription className="mt-1">数据来源：{g.provider}</CardDescription>
                     </div>
@@ -245,20 +504,22 @@ export default function Interfaces() {
                   <div className="flex gap-2 text-xs text-zinc-500 mb-3 flex-wrap">
                     <span className="bg-zinc-100 px-2 py-1 rounded">可用节点 {g.candidateCount}</span>
                     <span className="bg-zinc-100 px-2 py-1 rounded truncate max-w-[180px]" title={g.current || '还没有选中的节点'}>当前出口 {g.current || '还没有选中的节点'}</span>
+                    <span className="bg-zinc-100 px-2 py-1 rounded truncate max-w-[260px]" title={buildRouteSummary(g)}>实际路径 {buildRouteSummary(g)}</span>
+                    <span className="bg-zinc-100 px-2 py-1 rounded">{g.landingProxy ? `最终出口 ${g.landingProxy}` : '最终出口 直接出公网'}</span>
                   </div>
                   {g.filter && <p className="text-xs text-zinc-500 font-mono mb-3 bg-zinc-50 p-2 rounded">筛选规则：{g.filter}</p>}
 
-                  {(g.providerMissing || g.providerDisabled) && (
+                  {(g.providerMissing || g.providerDisabled || g.landingMissing || g.landingDisabled) && (
                     <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 p-2 rounded mb-3">
                       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                      <p>{g.providerMissing ? '这条线路原先使用的订阅已经不存在了，请重新选择数据来源。' : '这条线路依赖的订阅目前被停用了，恢复启用后这里会重新可用。'}</p>
+                      <p>{buildGroupWarning(g)}</p>
                     </div>
                   )}
 
-                  {!g.providerMissing && !g.providerDisabled && (
+                  {!g.providerMissing && !g.providerDisabled && !g.landingMissing && !g.landingDisabled && (
                     <div className="flex items-center gap-2 mb-3">
                       <Select 
-                        value={g.candidateCount > 0 ? g.current : undefined} 
+                        value={g.candidateCount > 0 ? g.currentValue : undefined} 
                         onValueChange={(val: string) => handleSelectGroup(g.name, val)}
                         disabled={g.candidateCount === 0 || g.mode === 'auto'}
                       >
@@ -266,7 +527,7 @@ export default function Interfaces() {
                           <SelectValue placeholder={g.candidateCount === 0 ? "没有节点匹配这条线路" : g.mode === 'auto' ? "系统会自动选择更合适的节点" : "选择一个当前要使用的节点"} />
                         </SelectTrigger>
                         <SelectContent>
-                          {g.candidates?.map((c) => <SelectItem key={c.name} value={c.name}>{c.name} ({c.type})</SelectItem>)}
+                          {g.candidates?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} ({c.type})</SelectItem>)}
                         </SelectContent>
                       </Select>
                       <Button variant="secondary" size="icon" onClick={() => handleHealthcheck(g.name)} title="重新检测当前线路里的节点" disabled={g.candidateCount === 0 || g.mode === 'auto'}>
@@ -306,6 +567,21 @@ export default function Interfaces() {
                 <SelectContent>{subscriptionNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
               </Select>
               <p className="text-xs leading-5 text-zinc-500">这条线路会从你选中的订阅里筛选节点。</p>
+            </div>
+            <div className="space-y-2">
+              <Label>最终出口</Label>
+              <Select value={landingSelectValue(groupForm.landing_proxy)} onValueChange={(val: string) => setGroupForm({ ...groupForm, landing_proxy: val === NO_LANDING_VALUE ? '' : val })}>
+                <SelectTrigger><SelectValue placeholder="直接出公网，或者选择一个落地节点" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_LANDING_VALUE}>直接出公网</SelectItem>
+                  {(landingProxies || []).map((landing) => (
+                    <SelectItem key={landing.name} value={landing.name}>
+                      {landing.name}{landing.enabled ? '' : '（已停用）'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs leading-5 text-zinc-500">如果这里选了落地节点，实际路径会先经过当前节点，再从这个落地节点出公网。</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -356,6 +632,20 @@ export default function Interfaces() {
                 <SelectContent>{subscriptionNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>最终出口</Label>
+              <Select value={landingSelectValue(groupForm.landing_proxy)} onValueChange={(val: string) => setGroupForm({ ...groupForm, landing_proxy: val === NO_LANDING_VALUE ? '' : val })}>
+                <SelectTrigger><SelectValue placeholder="直接出公网，或者选择一个落地节点" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_LANDING_VALUE}>直接出公网</SelectItem>
+                  {(landingProxies || []).map((landing) => (
+                    <SelectItem key={landing.name} value={landing.name}>
+                      {landing.name}{landing.enabled ? '' : '（已停用）'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center gap-1">
@@ -390,6 +680,148 @@ export default function Interfaces() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={showAddLanding} onOpenChange={setShowAddLanding}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>添加一个落地节点</DialogTitle>
+            <DialogDescription>这里配置的是最终出口。如果出口线路绑定了它，流量会先经过订阅节点，再从这个节点出公网。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>节点名称</Label>
+                <Input placeholder="例如：日本固定出口、新加坡落地" value={landingForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, name: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>协议</Label>
+                <Select value={landingForm.type} onValueChange={(val: string) => setLandingForm({ ...landingForm, type: val })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="socks5">SOCKS5</SelectItem>
+                    <SelectItem value="http">HTTP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>地址</Label>
+                <Input placeholder="landing.example.com" value={landingForm.server} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, server: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>端口</Label>
+                <Input type="number" placeholder="443" value={landingForm.port} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, port: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>用户名</Label>
+                <Input placeholder="可选" value={landingForm.username} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, username: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>密码</Label>
+                <Input placeholder="可选" value={landingForm.password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, password: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>SNI</Label>
+                <Input placeholder="只有 TLS 场景需要填写" value={landingForm.sni} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, sni: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label className="opacity-0">状态</Label>
+                <div className="rounded-lg border bg-zinc-50 px-3 py-2 text-sm text-zinc-600">
+                  这条落地节点创建后，就可以在出口线路里直接选用了。
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                <Switch checked={landingForm.enabled} onCheckedChange={(checked: boolean) => setLandingForm({ ...landingForm, enabled: checked })} />
+                <Label>启用这条落地节点</Label>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                <Switch checked={landingForm.tls} onCheckedChange={(checked: boolean) => setLandingForm({ ...landingForm, tls: checked })} />
+                <Label>通过 TLS 连接</Label>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                <Switch checked={landingForm.skip_cert_verify} onCheckedChange={(checked: boolean) => setLandingForm({ ...landingForm, skip_cert_verify: checked })} />
+                <Label>跳过证书校验</Label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddLanding(false)}>取消</Button>
+            <Button onClick={handleAddLanding} disabled={landingSubmitting}>{landingSubmitting ? '创建中...' : '创建落地节点'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditLanding} onOpenChange={setShowEditLanding}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>编辑落地节点：{editingLandingName}</DialogTitle>
+            <DialogDescription>修改这里会影响所有绑定了这条落地路径的出口线路。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>协议</Label>
+                <Select value={landingForm.type} onValueChange={(val: string) => setLandingForm({ ...landingForm, type: val })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="socks5">SOCKS5</SelectItem>
+                    <SelectItem value="http">HTTP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>端口</Label>
+                <Input type="number" value={landingForm.port} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, port: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>地址</Label>
+                <Input value={landingForm.server} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, server: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>SNI</Label>
+                <Input value={landingForm.sni} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, sni: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>用户名</Label>
+                <Input value={landingForm.username} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, username: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>密码</Label>
+                <Input value={landingForm.password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, password: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                <Switch checked={landingForm.enabled} onCheckedChange={(checked: boolean) => setLandingForm({ ...landingForm, enabled: checked })} />
+                <Label>启用</Label>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                <Switch checked={landingForm.tls} onCheckedChange={(checked: boolean) => setLandingForm({ ...landingForm, tls: checked })} />
+                <Label>TLS</Label>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                <Switch checked={landingForm.skip_cert_verify} onCheckedChange={(checked: boolean) => setLandingForm({ ...landingForm, skip_cert_verify: checked })} />
+                <Label>跳过证书校验</Label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditLanding(false)}>取消</Button>
+            <Button onClick={handleEditLanding} disabled={landingSubmitting}>{landingSubmitting ? '保存中...' : '保存落地节点'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={Boolean(pendingDeleteGroupName)}
         onOpenChange={(open) => {
@@ -401,6 +833,19 @@ export default function Interfaces() {
         destructive
         confirming={deletingGroup}
         onConfirm={handleDeleteGroup}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteLandingName)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteLandingName(null)
+        }}
+        title="删除这个落地节点后会发生什么？"
+        description={pendingDeleteLandingName ? `“${pendingDeleteLandingName}”删除后，已经绑定它的出口线路会失去最终出口，需要你重新指定。` : ''}
+        confirmLabel="确认删除"
+        destructive
+        confirming={deletingLanding}
+        onConfirm={handleDeleteLanding}
       />
     </div>
   )

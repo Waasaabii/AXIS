@@ -56,9 +56,10 @@ func LoadConfig(configPath string) (*Config, error) {
 			ExternalSecret:     parsed.Runtime.ExternalSecret,
 			RenderOnly:         true,
 		},
-		Subscriptions: parsed.Subscriptions,
-		EgressGroups:  parsed.EgressGroups,
-		Listeners:     parsed.Listeners,
+		Subscriptions:  parsed.Subscriptions,
+		LandingProxies: parsed.LandingProxies,
+		EgressGroups:   parsed.EgressGroups,
+		Listeners:      parsed.Listeners,
 	}
 
 	if parsed.Runtime.Workdir != "" || parsed.Runtime.MihomoBinary != "" || parsed.Runtime.ExternalController != "" || parsed.Runtime.ExternalSecret != "" || parsed.Runtime.RenderOnly {
@@ -95,6 +96,17 @@ func LoadConfig(configPath string) (*Config, error) {
 	for index := range config.EgressGroups {
 		if config.EgressGroups[index].Mode == "" {
 			config.EgressGroups[index].Mode = "manual"
+		}
+	}
+
+	for index := range config.LandingProxies {
+		if config.LandingProxies[index].Type == "" {
+			config.LandingProxies[index].Type = "socks5"
+		}
+		if !parsed.LandingProxies[index].Enabled {
+			config.LandingProxies[index].Enabled = false
+		} else if !config.LandingProxies[index].Enabled {
+			config.LandingProxies[index].Enabled = true
 		}
 	}
 
@@ -146,13 +158,35 @@ func ValidateConfig(config *Config) error {
 		providerNames[subscription.Name] = struct{}{}
 	}
 
+	landingNames := map[string]struct{}{}
+	for _, landing := range config.LandingProxies {
+		if landing.Name == "" {
+			return errors.New("landing_proxies[].name 不能为空")
+		}
+		if landing.Server == "" {
+			return fmt.Errorf("落地节点 %s 缺少 server", landing.Name)
+		}
+		if landing.Port <= 0 {
+			return fmt.Errorf("落地节点 %s 缺少 port", landing.Name)
+		}
+		switch landing.Type {
+		case "http", "socks5":
+		default:
+			return fmt.Errorf("落地节点 %s 暂不支持类型 %s", landing.Name, landing.Type)
+		}
+		if _, exists := landingNames[landing.Name]; exists {
+			return fmt.Errorf("重复的落地节点名称: %s", landing.Name)
+		}
+		landingNames[landing.Name] = struct{}{}
+	}
+
 	groupNames := map[string]struct{}{}
 	for _, group := range config.EgressGroups {
 		if group.Name == "" {
 			return errors.New("egress_groups[].name 不能为空")
 		}
 		if group.Provider == "" {
-			return fmt.Errorf("出口组 %s 缺少订阅源", group.Name)
+			return fmt.Errorf("出口线路 %s 缺少订阅源", group.Name)
 		}
 		if _, err := compilePattern(group.Filter); err != nil {
 			return err
@@ -161,7 +195,12 @@ func ValidateConfig(config *Config) error {
 			return err
 		}
 		if _, exists := groupNames[group.Name]; exists {
-			return fmt.Errorf("重复的出口组名称: %s", group.Name)
+			return fmt.Errorf("重复的出口线路名称: %s", group.Name)
+		}
+		if group.LandingProxy != "" {
+			if _, exists := landingNames[group.LandingProxy]; !exists {
+				return fmt.Errorf("出口线路 %s 绑定的落地节点 %s 不存在", group.Name, group.LandingProxy)
+			}
 		}
 		groupNames[group.Name] = struct{}{}
 	}
@@ -172,13 +211,16 @@ func ValidateConfig(config *Config) error {
 			return errors.New("listeners[].name 不能为空")
 		}
 		if listener.Port <= 0 {
-			return fmt.Errorf("监听 %s 缺少 port", listener.Name)
+			return fmt.Errorf("本地入口 %s 缺少 port", listener.Name)
 		}
 		if listener.EgressGroup == "" {
-			return fmt.Errorf("监听 %s 缺少 egress_group", listener.Name)
+			return fmt.Errorf("本地入口 %s 缺少 egress_group", listener.Name)
+		}
+		if _, exists := groupNames[listener.EgressGroup]; !exists {
+			return fmt.Errorf("本地入口 %s 绑定的出口线路 %s 不存在", listener.Name, listener.EgressGroup)
 		}
 		if _, exists := ports[listener.Port]; exists {
-			return fmt.Errorf("重复的监听端口: %d", listener.Port)
+			return fmt.Errorf("重复的本地入口端口: %d", listener.Port)
 		}
 		ports[listener.Port] = struct{}{}
 	}

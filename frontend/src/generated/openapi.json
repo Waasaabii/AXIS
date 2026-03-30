@@ -9,6 +9,9 @@
           "filter": {
             "type": "string"
           },
+          "landing_proxy": {
+            "type": "string"
+          },
           "mode": {
             "type": "string"
           },
@@ -22,6 +25,46 @@
         "required": [
           "name",
           "provider"
+        ],
+        "type": "object"
+      },
+      "AddLandingProxyRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "server": {
+            "type": "string"
+          },
+          "skip_cert_verify": {
+            "type": "boolean"
+          },
+          "sni": {
+            "type": "string"
+          },
+          "tls": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "server",
+          "port"
         ],
         "type": "object"
       },
@@ -133,6 +176,12 @@
             },
             "type": "array"
           },
+          "landing_proxies": {
+            "items": {
+              "$ref": "#/components/schemas/LandingProxy"
+            },
+            "type": "array"
+          },
           "listeners": {
             "items": {
               "$ref": "#/components/schemas/Listener"
@@ -157,6 +206,7 @@
           "admin",
           "runtime",
           "subscriptions",
+          "landing_proxies",
           "egress_groups",
           "listeners"
         ],
@@ -256,6 +306,9 @@
           "interval": {
             "type": "integer"
           },
+          "landing_proxy": {
+            "type": "string"
+          },
           "mode": {
             "type": "string"
           },
@@ -328,6 +381,9 @@
           "name": {
             "type": "string"
           },
+          "nodeName": {
+            "type": "string"
+          },
           "port": {
             "type": "integer"
           },
@@ -381,7 +437,19 @@
           "current": {
             "type": "string"
           },
+          "currentValue": {
+            "type": "string"
+          },
           "filter": {
+            "type": "string"
+          },
+          "landingDisabled": {
+            "type": "boolean"
+          },
+          "landingMissing": {
+            "type": "boolean"
+          },
+          "landingProxy": {
             "type": "string"
           },
           "lastHealthcheckAt": {
@@ -401,6 +469,9 @@
           },
           "providerMissing": {
             "type": "boolean"
+          },
+          "routeSummary": {
+            "type": "string"
           }
         },
         "required": [
@@ -411,7 +482,106 @@
           "candidateCount",
           "candidates",
           "providerMissing",
-          "providerDisabled"
+          "providerDisabled",
+          "landingMissing",
+          "landingDisabled"
+        ],
+        "type": "object"
+      },
+      "LandingProxy": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "server": {
+            "type": "string"
+          },
+          "skip_cert_verify": {
+            "type": "boolean"
+          },
+          "sni": {
+            "type": "string"
+          },
+          "tls": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "server",
+          "port",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "LandingProxyView": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "inUseBy": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "routeCount": {
+            "type": "integer"
+          },
+          "server": {
+            "type": "string"
+          },
+          "skipCertVerify": {
+            "type": "boolean"
+          },
+          "sni": {
+            "type": "string"
+          },
+          "tls": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "server",
+          "port",
+          "tls",
+          "skipCertVerify",
+          "enabled",
+          "inUseBy",
+          "routeCount"
         ],
         "type": "object"
       },
@@ -483,6 +653,12 @@
           "groupMissing": {
             "type": "boolean"
           },
+          "landingDisabled": {
+            "type": "boolean"
+          },
+          "landingMissing": {
+            "type": "boolean"
+          },
           "listen": {
             "type": "string"
           },
@@ -497,6 +673,9 @@
           },
           "providerMissing": {
             "type": "boolean"
+          },
+          "routeSummary": {
+            "type": "string"
           },
           "status": {
             "type": "string"
@@ -529,7 +708,9 @@
           "status",
           "groupMissing",
           "providerMissing",
-          "providerDisabled"
+          "providerDisabled",
+          "landingMissing",
+          "landingDisabled"
         ],
         "type": "object"
       },
@@ -1458,10 +1639,45 @@
           "filter": {
             "type": "string"
           },
+          "landing_proxy": {
+            "type": "string"
+          },
           "mode": {
             "type": "string"
           },
           "provider": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateLandingProxyRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "server": {
+            "type": "string"
+          },
+          "skip_cert_verify": {
+            "type": "boolean"
+          },
+          "sni": {
+            "type": "string"
+          },
+          "tls": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "username": {
             "type": "string"
           }
         },
@@ -1724,14 +1940,14 @@
             "description": "服务端错误"
           }
         },
-        "summary": "创建出口组"
+        "summary": "创建出口线路"
       }
     },
     "/api/egress-groups/{name}": {
       "delete": {
         "parameters": [
           {
-            "description": "出口组名称",
+            "description": "出口线路名称",
             "in": "path",
             "name": "name",
             "required": true,
@@ -1792,14 +2008,14 @@
             "description": "服务端错误"
           }
         },
-        "summary": "删除出口组"
+        "summary": "删除出口线路"
       }
     },
     "/api/egress-groups/{name}/update": {
       "put": {
         "parameters": [
           {
-            "description": "出口组名称",
+            "description": "出口线路名称",
             "in": "path",
             "name": "name",
             "required": true,
@@ -1870,7 +2086,7 @@
             "description": "服务端错误"
           }
         },
-        "summary": "更新出口组"
+        "summary": "更新出口线路"
       }
     },
     "/api/events": {
@@ -1917,7 +2133,7 @@
                 }
               }
             },
-            "description": "出口组视图"
+            "description": "出口线路视图"
           },
           "401": {
             "content": {
@@ -1930,14 +2146,14 @@
             "description": "未登录"
           }
         },
-        "summary": "出口组列表"
+        "summary": "出口线路列表"
       }
     },
     "/api/groups/{groupName}/healthcheck": {
       "post": {
         "parameters": [
           {
-            "description": "出口组名称",
+            "description": "出口线路名称",
             "in": "path",
             "name": "groupName",
             "required": true,
@@ -1975,7 +2191,7 @@
                 }
               }
             },
-            "description": "出口组不存在"
+            "description": "出口线路不存在"
           }
         },
         "summary": "执行健康检查"
@@ -1985,7 +2201,7 @@
       "post": {
         "parameters": [
           {
-            "description": "出口组名称",
+            "description": "出口线路名称",
             "in": "path",
             "name": "groupName",
             "required": true,
@@ -2043,10 +2259,251 @@
                 }
               }
             },
-            "description": "出口组不存在"
+            "description": "出口线路不存在"
           }
         },
-        "summary": "切换出口组节点"
+        "summary": "切换出口线路节点"
+      }
+    },
+    "/api/landing-proxies": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LandingProxyView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "落地节点视图"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "落地节点列表"
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddLandingProxyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "创建落地节点"
+      }
+    },
+    "/api/landing-proxies/{name}": {
+      "delete": {
+        "parameters": [
+          {
+            "description": "落地节点名称",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "删除落地节点"
+      }
+    },
+    "/api/landing-proxies/{name}/update": {
+      "put": {
+        "parameters": [
+          {
+            "description": "落地节点名称",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLandingProxyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "更新落地节点"
       }
     },
     "/api/listeners": {

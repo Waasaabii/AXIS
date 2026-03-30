@@ -17,6 +17,15 @@ import { generatePassword, generateUsername } from '@/lib/random'
 import { toast } from 'sonner'
 import { Network, Radio, Users, ShieldAlert, Plus, Trash2, Pencil, AlertTriangle, Eye, EyeOff, Copy, Shuffle } from 'lucide-react'
 
+function buildListenerWarning(listener: ListenerView) {
+  if (listener.groupMissing) return '这条入口原先绑定的出口线路已经不存在了，请重新选择线路。'
+  if (listener.providerMissing) return '这条入口依赖的订阅已经不存在了。'
+  if (listener.providerDisabled) return '这条入口依赖的订阅目前被停用了。'
+  if (listener.landingMissing) return '这条入口绑定的落地节点已经被删除了，请重新指定最终出口。'
+  if (listener.landingDisabled) return '这条入口绑定的落地节点目前已停用，这条路径暂时不会继续往下转发。'
+  return ''
+}
+
 /* ── PasswordCell component ── */
 function PasswordCell({ value }: { value: string }) {
   const [visible, setVisible] = useState(false)
@@ -185,7 +194,7 @@ export default function Listeners() {
             />
           ) : (
             listeners.map((l: ListenerView) => (
-              <Card key={l.name} className={`flex flex-col ${l.groupMissing || l.providerMissing ? 'border-red-200 bg-red-50/30' : l.providerDisabled ? 'border-amber-200 bg-amber-50/30' : ''}`}>
+              <Card key={l.name} className={`flex flex-col ${l.groupMissing || l.providerMissing || l.landingMissing ? 'border-red-200 bg-red-50/30' : l.providerDisabled || l.landingDisabled ? 'border-amber-200 bg-amber-50/30' : ''}`}>
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -213,6 +222,7 @@ export default function Listeners() {
                     <div className="bg-zinc-50 rounded-lg p-3 text-sm border space-y-2">
                       <div className="flex justify-between"><span className="text-zinc-500">使用线路</span><span className="font-medium text-zinc-900">{l.egressGroup}</span></div>
                       <div className="flex justify-between"><span className="text-zinc-500">当前出口</span><span className="text-zinc-900 truncate max-w-[140px]" title={l.currentProxy || '还没有选中的节点'}>{l.currentProxy || '还没有选中的节点'}</span></div>
+                      <div className="flex justify-between gap-3"><span className="text-zinc-500">实际路径</span><span className="text-zinc-900 text-right break-all" title={l.routeSummary || `${l.currentProxy || l.egressGroup} -> 公网`}>{l.routeSummary || `${l.currentProxy || l.egressGroup} -> 公网`}</span></div>
                     </div>
 
                     {l.users && l.users.length > 0 && (
@@ -238,10 +248,10 @@ export default function Listeners() {
                     )}
                   </div>
 
-                  {(l.groupMissing || l.providerMissing || l.providerDisabled) && (
+                  {(l.groupMissing || l.providerMissing || l.providerDisabled || l.landingMissing || l.landingDisabled) && (
                     <div className="mt-4 flex items-start gap-2 text-xs text-amber-600 bg-amber-50 p-2 rounded">
                       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                      <p>{l.groupMissing ? '这条入口原先绑定的出口线路已经不存在了，请重新选择线路。' : l.providerMissing ? '这条入口依赖的订阅已经不存在了。' : '这条入口依赖的订阅目前被停用了。'}</p>
+                      <p>{buildListenerWarning(l)}</p>
                     </div>
                   )}
                   {l.userCount === 0 && !l.groupMissing && (

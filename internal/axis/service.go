@@ -443,17 +443,51 @@ func matchesGroup(group EgressGroup, node NodeInfo) bool {
 	return include && !exclude
 }
 
+func relaySourceGroupName(groupName string) string {
+	return groupName + "::source"
+}
+
+func landingProxyRuntimeName(name string) string {
+	return "landing::" + name
+}
+
+func formatRouteSummary(groupName, currentProxy, landingProxy string) string {
+	base := firstNonEmpty(currentProxy, groupName)
+	if landingProxy == "" {
+		return fmt.Sprintf("%s -> 公网", base)
+	}
+	return fmt.Sprintf("%s -> %s", base, landingProxy)
+}
+
 func (s *Service) buildGroupView(group EgressGroup) GroupView {
 	providerRecord := s.getProviderRecord(group.Provider)
 	candidates := []GroupCandidate{}
 	for _, node := range providerRecord.Nodes {
 		if matchesGroup(group, node) {
-			candidates = append(candidates, GroupCandidate{ID: node.ID, Name: node.Name, Type: node.Type, Server: node.Server, Port: node.Port})
+			candidateID := node.Name
+			candidateName := node.Name
+			if group.LandingProxy != "" {
+				candidateID = fmt.Sprintf("%s -> %s", node.Name, group.LandingProxy)
+				candidateName = candidateID
+			}
+			candidates = append(candidates, GroupCandidate{ID: candidateID, Name: candidateName, Type: node.Type, Server: node.Server, Port: node.Port, NodeName: node.Name})
 		}
 	}
-	selection := s.state.GroupSelections[group.Name]
-	if selection == "" && len(candidates) > 0 {
-		selection = candidates[0].Name
+	currentValue := s.state.GroupSelections[group.Name]
+	currentLabel := ""
+	for _, candidate := range candidates {
+		if candidate.ID == currentValue || (group.LandingProxy != "" && candidate.NodeName == currentValue) {
+			currentValue = candidate.ID
+			currentLabel = candidate.Name
+			break
+		}
+	}
+	if currentValue == "" && len(candidates) > 0 {
+		currentValue = candidates[0].ID
+		currentLabel = candidates[0].Name
+	}
+	if currentLabel == "" && len(candidates) > 0 {
+		currentLabel = candidates[0].Name
 	}
 	groupState := s.state.Groups[group.Name]
 	return GroupView{
@@ -462,9 +496,12 @@ func (s *Service) buildGroupView(group EgressGroup) GroupView {
 		Provider:          group.Provider,
 		Filter:            group.Filter,
 		CandidateCount:    len(candidates),
-		Current:           selection,
+		Current:           currentLabel,
+		CurrentValue:      currentValue,
 		Candidates:        candidates,
 		LastHealthcheckAt: groupState.LastHealthcheckAt,
+		LandingProxy:      group.LandingProxy,
+		RouteSummary:      formatRouteSummary(group.Name, currentLabel, group.LandingProxy),
 	}
 }
 
@@ -477,14 +514,26 @@ func (s *Service) GetGroups() []GroupView {
 			enabledProviders[subscription.Name] = struct{}{}
 		}
 	}
+	landingNames := map[string]struct{}{}
+	enabledLandings := map[string]struct{}{}
+	for _, landing := range s.config.LandingProxies {
+		landingNames[landing.Name] = struct{}{}
+		if landing.Enabled {
+			enabledLandings[landing.Name] = struct{}{}
+		}
+	}
 
 	views := make([]GroupView, 0, len(s.config.EgressGroups))
 	for _, group := range s.config.EgressGroups {
 		view := s.buildGroupView(group)
 		_, providerExists := providerNames[group.Provider]
 		_, providerEnabled := enabledProviders[group.Provider]
+		_, landingExists := landingNames[group.LandingProxy]
+		_, landingEnabled := enabledLandings[group.LandingProxy]
 		view.ProviderMissing = !providerExists
 		view.ProviderDisabled = providerExists && !providerEnabled
+		view.LandingMissing = group.LandingProxy != "" && !landingExists
+		view.LandingDisabled = group.LandingProxy != "" && landingExists && !landingEnabled
 		views = append(views, view)
 	}
 	return views
@@ -510,7 +559,7 @@ func (s *Service) GetListeners() []ListenerView {
 		status := "configured"
 		if groupMissing {
 			status = "orphaned"
-		} else if group.ProviderMissing || group.ProviderDisabled {
+		} else if group.ProviderMissing || group.ProviderDisabled || group.LandingMissing || group.LandingDisabled {
 			status = "degraded"
 		}
 
@@ -524,13 +573,47 @@ func (s *Service) GetListeners() []ListenerView {
 			UserCount:        len(listener.Users),
 			EgressGroup:      listener.EgressGroup,
 			CurrentProxy:     ternaryString(ok, group.Current, ""),
+			RouteSummary:     ternaryString(ok, group.RouteSummary, listener.EgressGroup),
 			Status:           status,
 			GroupMissing:     groupMissing,
 			ProviderMissing:  group.ProviderMissing,
 			ProviderDisabled: group.ProviderDisabled,
+			LandingMissing:   group.LandingMissing,
+			LandingDisabled:  group.LandingDisabled,
 		})
 	}
 	return listeners
+}
+
+func (s *Service) buildLandingProxyView(landing LandingProxy) LandingProxyView {
+	inUseBy := []string{}
+	for _, group := range s.config.EgressGroups {
+		if group.LandingProxy == landing.Name {
+			inUseBy = append(inUseBy, group.Name)
+		}
+	}
+	return LandingProxyView{
+		Name:           landing.Name,
+		Type:           landing.Type,
+		Server:         landing.Server,
+		Port:           landing.Port,
+		Username:       landing.Username,
+		Password:       landing.Password,
+		TLS:            landing.TLS,
+		SNI:            landing.SNI,
+		SkipCertVerify: landing.SkipCertVerify,
+		Enabled:        landing.Enabled,
+		InUseBy:        inUseBy,
+		RouteCount:     len(inUseBy),
+	}
+}
+
+func (s *Service) GetLandingProxies() []LandingProxyView {
+	views := make([]LandingProxyView, 0, len(s.config.LandingProxies))
+	for _, landing := range s.config.LandingProxies {
+		views = append(views, s.buildLandingProxyView(landing))
+	}
+	return views
 }
 
 func (s *Service) GetEvents() []EventEntry {
@@ -729,22 +812,30 @@ func (s *Service) SelectGroup(groupName, proxyName string) (map[string]any, int)
 		}
 	}
 	if group == nil {
-		return map[string]any{"ok": false, "error": fmt.Sprintf("未找到出口组: %s", groupName)}, 404
+		return map[string]any{"ok": false, "error": fmt.Sprintf("未找到出口线路：%s", groupName)}, 404
 	}
 	view := s.buildGroupView(*group)
 	found := false
+	runtimeProxyName := proxyName
+	selectedValue := proxyName
 	for _, candidate := range view.Candidates {
-		if candidate.Name == proxyName {
+		if candidate.ID == proxyName || (group.LandingProxy != "" && candidate.NodeName == proxyName) {
 			found = true
+			selectedValue = candidate.ID
+			runtimeProxyName = firstNonEmpty(candidate.NodeName, candidate.ID)
 			break
 		}
 	}
 	if !found {
-		return map[string]any{"ok": false, "error": fmt.Sprintf("节点不属于出口组 %s", groupName)}, 400
+		return map[string]any{"ok": false, "error": fmt.Sprintf("你选择的节点不在出口线路“%s”里", groupName)}, 400
 	}
 
-	s.state.GroupSelections[groupName] = proxyName
-	runtimeResult, err := s.controller.SelectProxy(groupName, proxyName)
+	s.state.GroupSelections[groupName] = selectedValue
+	runtimeGroupName := groupName
+	if group.LandingProxy != "" {
+		runtimeGroupName = relaySourceGroupName(group.Name)
+	}
+	runtimeResult, err := s.controller.SelectProxy(runtimeGroupName, runtimeProxyName)
 	runtimePayload := map[string]any{}
 	if err != nil {
 		runtimePayload["ok"] = false
@@ -754,7 +845,7 @@ func (s *Service) SelectGroup(groupName, proxyName string) (map[string]any, int)
 		runtimePayload["status"] = runtimeResult.Status
 		runtimePayload["payload"] = runtimeResult.Payload
 	}
-	s.pushEvent("info", "group", fmt.Sprintf("出口组 %s 已切换到 %s", groupName, proxyName))
+	s.pushEvent("info", "group", fmt.Sprintf("出口线路 %s 已切换到 %s", groupName, selectedValue))
 	_ = s.persistState()
 	result := s.buildGroupView(*group)
 	return map[string]any{"ok": true, "group": result, "runtime": runtimePayload}, 200
@@ -769,10 +860,10 @@ func (s *Service) RunHealthcheck(groupName string) (map[string]any, int) {
 		}
 	}
 	if group == nil {
-		return map[string]any{"ok": false, "error": fmt.Sprintf("未找到出口组: %s", groupName)}, 404
+		return map[string]any{"ok": false, "error": fmt.Sprintf("未找到出口线路：%s", groupName)}, 404
 	}
 	s.state.Groups[groupName] = GroupState{LastHealthcheckAt: nowISO()}
-	s.pushEvent("info", "healthcheck", fmt.Sprintf("已执行出口组健康检查: %s", groupName))
+	s.pushEvent("info", "healthcheck", fmt.Sprintf("已执行出口线路健康检查：%s", groupName))
 	_ = s.persistState()
 	return map[string]any{"ok": true, "group": s.buildGroupView(*group)}, 200
 }
@@ -880,24 +971,37 @@ func (s *Service) AddEgressGroup(payload map[string]any) (map[string]any, int) {
 	name := strings.TrimSpace(stringValue(payload["name"]))
 	provider := stringValue(payload["provider"])
 	if name == "" || provider == "" {
-		return map[string]any{"ok": false, "error": "出口组名称和订阅源不能为空"}, 400
+		return map[string]any{"ok": false, "error": "出口线路名称和订阅源不能为空"}, 400
 	}
 	for _, group := range s.config.EgressGroups {
 		if group.Name == name {
-			return map[string]any{"ok": false, "error": fmt.Sprintf("出口组 %s 已存在", name)}, 400
+			return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 已存在", name)}, 400
 		}
 	}
 	if !s.hasSubscription(provider) {
 		return map[string]any{"ok": false, "error": fmt.Sprintf("订阅源 %s 不存在", provider)}, 400
 	}
+	landingProxy := strings.TrimSpace(stringValue(payload["landing_proxy"]))
+	if landingProxy != "" && !s.hasLandingProxy(landingProxy) {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("落地节点 %s 不存在", landingProxy)}, 400
+	}
 	next := mustJSONClone(*s.config)
-	next.EgressGroups = append(next.EgressGroups, EgressGroup{Name: name, Provider: provider, Mode: firstNonEmpty(stringValue(payload["mode"]), "manual"), Filter: stringValue(payload["filter"]), ExcludeFilter: stringValue(payload["exclude_filter"])})
+	next.EgressGroups = append(next.EgressGroups, EgressGroup{Name: name, Provider: provider, Mode: firstNonEmpty(stringValue(payload["mode"]), "manual"), Filter: stringValue(payload["filter"]), ExcludeFilter: stringValue(payload["exclude_filter"]), LandingProxy: landingProxy})
 	return s.SaveConfig(&next)
 }
 
 func (s *Service) hasSubscription(name string) bool {
 	for _, subscription := range s.config.Subscriptions {
 		if subscription.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) hasLandingProxy(name string) bool {
+	for _, landing := range s.config.LandingProxies {
+		if landing.Name == name {
 			return true
 		}
 	}
@@ -914,13 +1018,19 @@ func (s *Service) UpdateEgressGroup(name string, payload map[string]any) (map[st
 		}
 	}
 	if index < 0 {
-		return map[string]any{"ok": false, "error": fmt.Sprintf("出口组 %s 不存在", name)}, 404
+		return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", name)}, 404
 	}
 	if provider := stringValue(payload["provider"]); provider != "" {
 		if !s.hasSubscription(provider) {
 			return map[string]any{"ok": false, "error": fmt.Sprintf("订阅源 %s 不存在", provider)}, 400
 		}
 		next.EgressGroups[index].Provider = provider
+	}
+	if landingProxy := strings.TrimSpace(stringValue(payload["landing_proxy"])); payload["landing_proxy"] != nil {
+		if landingProxy != "" && !s.hasLandingProxy(landingProxy) {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("落地节点 %s 不存在", landingProxy)}, 400
+		}
+		next.EgressGroups[index].LandingProxy = landingProxy
 	}
 	if mode := stringValue(payload["mode"]); mode != "" {
 		next.EgressGroups[index].Mode = mode
@@ -937,7 +1047,7 @@ func (s *Service) UpdateEgressGroup(name string, payload map[string]any) (map[st
 func (s *Service) RemoveEgressGroup(name string) (map[string]any, int) {
 	for _, listener := range s.config.Listeners {
 		if listener.EgressGroup == name {
-			return map[string]any{"ok": false, "error": fmt.Sprintf("出口组 %s 仍被监听接口引用，请先删除相关接口", name)}, 400
+			return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 仍被本地入口使用，请先解除绑定", name)}, 400
 		}
 	}
 	next := mustJSONClone(*s.config)
@@ -951,9 +1061,108 @@ func (s *Service) RemoveEgressGroup(name string) (map[string]any, int) {
 		filtered = append(filtered, group)
 	}
 	if !found {
-		return map[string]any{"ok": false, "error": fmt.Sprintf("出口组 %s 不存在", name)}, 404
+		return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", name)}, 404
 	}
 	next.EgressGroups = filtered
+	return s.SaveConfig(&next)
+}
+
+func (s *Service) AddLandingProxy(payload map[string]any) (map[string]any, int) {
+	name := strings.TrimSpace(stringValue(payload["name"]))
+	server := strings.TrimSpace(stringValue(payload["server"]))
+	port := intValue(payload["port"], 0)
+	if name == "" || server == "" || port == 0 {
+		return map[string]any{"ok": false, "error": "落地节点名称、地址和端口不能为空"}, 400
+	}
+	if landingType := firstNonEmpty(stringValue(payload["type"]), "socks5"); landingType != "socks5" && landingType != "http" {
+		return map[string]any{"ok": false, "error": "当前只支持 HTTP 和 SOCKS5 两种落地节点"}, 400
+	}
+	for _, landing := range s.config.LandingProxies {
+		if landing.Name == name {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("落地节点 %s 已存在", name)}, 400
+		}
+	}
+	next := mustJSONClone(*s.config)
+	next.LandingProxies = append(next.LandingProxies, LandingProxy{
+		Name:           name,
+		Type:           firstNonEmpty(stringValue(payload["type"]), "socks5"),
+		Server:         server,
+		Port:           port,
+		Username:       stringValue(payload["username"]),
+		Password:       stringValue(payload["password"]),
+		TLS:            boolValue(payload["tls"], false),
+		SNI:            stringValue(payload["sni"]),
+		SkipCertVerify: boolValue(payload["skip_cert_verify"], false),
+		Enabled:        boolValue(payload["enabled"], true),
+	})
+	return s.SaveConfig(&next)
+}
+
+func (s *Service) UpdateLandingProxy(name string, payload map[string]any) (map[string]any, int) {
+	next := mustJSONClone(*s.config)
+	index := -1
+	for i := range next.LandingProxies {
+		if next.LandingProxies[i].Name == name {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("落地节点 %s 不存在", name)}, 404
+	}
+	if landingType := stringValue(payload["type"]); landingType != "" {
+		if landingType != "socks5" && landingType != "http" {
+			return map[string]any{"ok": false, "error": "当前只支持 HTTP 和 SOCKS5 两种落地节点"}, 400
+		}
+		next.LandingProxies[index].Type = landingType
+	}
+	if server := strings.TrimSpace(stringValue(payload["server"])); payload["server"] != nil {
+		next.LandingProxies[index].Server = server
+	}
+	if port := intValue(payload["port"], 0); port != 0 {
+		next.LandingProxies[index].Port = port
+	}
+	if payload["username"] != nil {
+		next.LandingProxies[index].Username = stringValue(payload["username"])
+	}
+	if payload["password"] != nil {
+		next.LandingProxies[index].Password = stringValue(payload["password"])
+	}
+	if payload["tls"] != nil {
+		next.LandingProxies[index].TLS = boolValue(payload["tls"], false)
+	}
+	if payload["sni"] != nil {
+		next.LandingProxies[index].SNI = stringValue(payload["sni"])
+	}
+	if payload["skip_cert_verify"] != nil {
+		next.LandingProxies[index].SkipCertVerify = boolValue(payload["skip_cert_verify"], false)
+	}
+	if payload["enabled"] != nil {
+		next.LandingProxies[index].Enabled = boolValue(payload["enabled"], true)
+	}
+	return s.SaveConfig(&next)
+}
+
+func (s *Service) RemoveLandingProxy(name string) (map[string]any, int) {
+	for _, group := range s.config.EgressGroups {
+		if group.LandingProxy == name {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("落地节点 %s 仍被出口组 %s 使用，请先解除绑定", name, group.Name)}, 400
+		}
+	}
+	next := mustJSONClone(*s.config)
+	filtered := make([]LandingProxy, 0, len(next.LandingProxies))
+	found := false
+	for _, landing := range next.LandingProxies {
+		if landing.Name == name {
+			found = true
+			continue
+		}
+		filtered = append(filtered, landing)
+	}
+	if !found {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("落地节点 %s 不存在", name)}, 404
+	}
+	next.LandingProxies = filtered
 	return s.SaveConfig(&next)
 }
 
@@ -962,18 +1171,18 @@ func (s *Service) AddListener(payload map[string]any) (map[string]any, int) {
 	port := intValue(payload["port"], 0)
 	egressGroup := stringValue(payload["egress_group"])
 	if name == "" || port == 0 || egressGroup == "" {
-		return map[string]any{"ok": false, "error": "监听名称、端口和出口组不能为空"}, 400
+		return map[string]any{"ok": false, "error": "本地入口名称、端口和出口线路不能为空"}, 400
 	}
 	for _, listener := range s.config.Listeners {
 		if listener.Name == name {
-			return map[string]any{"ok": false, "error": fmt.Sprintf("监听 %s 已存在", name)}, 400
+			return map[string]any{"ok": false, "error": fmt.Sprintf("本地入口 %s 已存在", name)}, 400
 		}
 		if listener.Port == port {
 			return map[string]any{"ok": false, "error": fmt.Sprintf("端口 %d 已被占用", port)}, 400
 		}
 	}
 	if !s.hasGroup(egressGroup) {
-		return map[string]any{"ok": false, "error": fmt.Sprintf("出口组 %s 不存在", egressGroup)}, 400
+		return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", egressGroup)}, 400
 	}
 
 	next := mustJSONClone(*s.config)
@@ -1025,7 +1234,7 @@ func (s *Service) UpdateListener(name string, payload map[string]any) (map[strin
 		}
 	}
 	if index < 0 {
-		return map[string]any{"ok": false, "error": fmt.Sprintf("监听 %s 不存在", name)}, 404
+		return map[string]any{"ok": false, "error": fmt.Sprintf("本地入口 %s 不存在", name)}, 404
 	}
 
 	if port := intValue(payload["port"], 0); port != 0 && port != next.Listeners[index].Port {
@@ -1038,7 +1247,7 @@ func (s *Service) UpdateListener(name string, payload map[string]any) (map[strin
 	}
 	if egressGroup := stringValue(payload["egress_group"]); egressGroup != "" {
 		if !s.hasGroup(egressGroup) {
-			return map[string]any{"ok": false, "error": fmt.Sprintf("出口组 %s 不存在", egressGroup)}, 400
+			return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", egressGroup)}, 400
 		}
 		next.Listeners[index].EgressGroup = egressGroup
 	}
@@ -1069,7 +1278,7 @@ func (s *Service) RemoveListener(name string) (map[string]any, int) {
 		filtered = append(filtered, listener)
 	}
 	if !found {
-		return map[string]any{"ok": false, "error": fmt.Sprintf("监听 %s 不存在", name)}, 404
+		return map[string]any{"ok": false, "error": fmt.Sprintf("本地入口 %s 不存在", name)}, 404
 	}
 	next.Listeners = filtered
 	return s.SaveConfig(&next)

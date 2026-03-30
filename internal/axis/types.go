@@ -35,12 +35,26 @@ type Subscription struct {
 	Via                 string            `json:"via,omitempty" yaml:"via,omitempty"`
 }
 
+type LandingProxy struct {
+	Name           string `json:"name" yaml:"name"`
+	Type           string `json:"type" yaml:"type"`
+	Server         string `json:"server" yaml:"server"`
+	Port           int    `json:"port" yaml:"port"`
+	Username       string `json:"username,omitempty" yaml:"username,omitempty"`
+	Password       string `json:"password,omitempty" yaml:"password,omitempty"`
+	TLS            bool   `json:"tls,omitempty" yaml:"tls,omitempty"`
+	SNI            string `json:"sni,omitempty" yaml:"sni,omitempty"`
+	SkipCertVerify bool   `json:"skip_cert_verify,omitempty" yaml:"skip_cert_verify,omitempty"`
+	Enabled        bool   `json:"enabled" yaml:"enabled"`
+}
+
 type EgressGroup struct {
 	Name           string `json:"name" yaml:"name"`
 	Provider       string `json:"provider" yaml:"provider"`
 	Mode           string `json:"mode" yaml:"mode"`
 	Filter         string `json:"filter" yaml:"filter"`
 	ExcludeFilter  string `json:"exclude_filter" yaml:"exclude_filter"`
+	LandingProxy   string `json:"landing_proxy,omitempty" yaml:"landing_proxy,omitempty"`
 	Strategy       string `json:"strategy,omitempty" yaml:"strategy,omitempty"`
 	HealthCheckURL string `json:"health_check_url,omitempty" yaml:"health_check_url,omitempty"`
 	Interval       int    `json:"interval,omitempty" yaml:"interval,omitempty"`
@@ -64,12 +78,13 @@ type Listener struct {
 }
 
 type Config struct {
-	Server        ServerConfig   `json:"server" yaml:"server"`
-	Admin         AdminConfig    `json:"admin" yaml:"admin"`
-	Runtime       RuntimeConfig  `json:"runtime" yaml:"runtime"`
-	Subscriptions []Subscription `json:"subscriptions" yaml:"subscriptions"`
-	EgressGroups  []EgressGroup  `json:"egress_groups" yaml:"egress_groups"`
-	Listeners     []Listener     `json:"listeners" yaml:"listeners"`
+	Server         ServerConfig   `json:"server" yaml:"server"`
+	Admin          AdminConfig    `json:"admin" yaml:"admin"`
+	Runtime        RuntimeConfig  `json:"runtime" yaml:"runtime"`
+	Subscriptions  []Subscription `json:"subscriptions" yaml:"subscriptions"`
+	LandingProxies []LandingProxy `json:"landing_proxies" yaml:"landing_proxies"`
+	EgressGroups   []EgressGroup  `json:"egress_groups" yaml:"egress_groups"`
+	Listeners      []Listener     `json:"listeners" yaml:"listeners"`
 }
 
 type RuntimeLayout struct {
@@ -147,11 +162,12 @@ type AppState struct {
 }
 
 type GroupCandidate struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Type   string `json:"type"`
-	Server string `json:"server"`
-	Port   int    `json:"port"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Server   string `json:"server"`
+	Port     int    `json:"port"`
+	NodeName string `json:"nodeName,omitempty"`
 }
 
 type GroupView struct {
@@ -161,10 +177,15 @@ type GroupView struct {
 	Filter            string           `json:"filter"`
 	CandidateCount    int              `json:"candidateCount"`
 	Current           string           `json:"current,omitempty"`
+	CurrentValue      string           `json:"currentValue,omitempty"`
 	Candidates        []GroupCandidate `json:"candidates"`
 	LastHealthcheckAt string           `json:"lastHealthcheckAt,omitempty"`
+	LandingProxy      string           `json:"landingProxy,omitempty"`
+	RouteSummary      string           `json:"routeSummary,omitempty"`
 	ProviderMissing   bool             `json:"providerMissing"`
 	ProviderDisabled  bool             `json:"providerDisabled"`
+	LandingMissing    bool             `json:"landingMissing"`
+	LandingDisabled   bool             `json:"landingDisabled"`
 }
 
 type ListenerView struct {
@@ -177,10 +198,28 @@ type ListenerView struct {
 	UserCount        int            `json:"userCount"`
 	EgressGroup      string         `json:"egressGroup"`
 	CurrentProxy     string         `json:"currentProxy,omitempty"`
+	RouteSummary     string         `json:"routeSummary,omitempty"`
 	Status           string         `json:"status"`
 	GroupMissing     bool           `json:"groupMissing"`
 	ProviderMissing  bool           `json:"providerMissing"`
 	ProviderDisabled bool           `json:"providerDisabled"`
+	LandingMissing   bool           `json:"landingMissing"`
+	LandingDisabled  bool           `json:"landingDisabled"`
+}
+
+type LandingProxyView struct {
+	Name           string   `json:"name"`
+	Type           string   `json:"type"`
+	Server         string   `json:"server"`
+	Port           int      `json:"port"`
+	Username       string   `json:"username,omitempty"`
+	Password       string   `json:"password,omitempty"`
+	TLS            bool     `json:"tls"`
+	SNI            string   `json:"sni,omitempty"`
+	SkipCertVerify bool     `json:"skipCertVerify"`
+	Enabled        bool     `json:"enabled"`
+	InUseBy        []string `json:"inUseBy"`
+	RouteCount     int      `json:"routeCount"`
 }
 
 type RuntimeCheck struct {

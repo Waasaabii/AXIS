@@ -199,7 +199,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 创建出口组 */
+        /** 创建出口线路 */
         post: {
             parameters: {
                 query?: never;
@@ -276,13 +276,13 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** 删除出口组 */
+        /** 删除出口线路 */
         delete: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description 出口组名称 */
+                    /** @description 出口线路名称 */
                     name: string;
                 };
                 cookie?: never;
@@ -349,13 +349,13 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 更新出口组 */
+        /** 更新出口线路 */
         put: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description 出口组名称 */
+                    /** @description 出口线路名称 */
                     name: string;
                 };
                 cookie?: never;
@@ -472,7 +472,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 出口组列表 */
+        /** 出口线路列表 */
         get: {
             parameters: {
                 query?: never;
@@ -482,7 +482,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description 出口组视图 */
+                /** @description 出口线路视图 */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -525,7 +525,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description 出口组名称 */
+                    /** @description 出口线路名称 */
                     groupName: string;
                 };
                 cookie?: never;
@@ -550,7 +550,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description 出口组不存在 */
+                /** @description 出口线路不存在 */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -576,13 +576,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 切换出口组节点 */
+        /** 切换出口线路节点 */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description 出口组名称 */
+                    /** @description 出口线路名称 */
                     groupName: string;
                 };
                 cookie?: never;
@@ -620,7 +620,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description 出口组不存在 */
+                /** @description 出口线路不存在 */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -631,6 +631,265 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/landing-proxies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 落地节点列表 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 落地节点视图 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LandingProxyView"][];
+                    };
+                };
+                /** @description 未登录 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** 创建落地节点 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AddLandingProxyRequest"];
+                };
+            };
+            responses: {
+                /** @description 保存结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SaveConfigResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录或会话已过期 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 目标不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 服务端错误 */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/landing-proxies/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除落地节点 */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 落地节点名称 */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 保存结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SaveConfigResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录或会话已过期 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 目标不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 服务端错误 */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/landing-proxies/{name}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新落地节点 */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 落地节点名称 */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateLandingProxyRequest"];
+                };
+            };
+            responses: {
+                /** @description 保存结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SaveConfigResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录或会话已过期 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 目标不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 服务端错误 */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1933,9 +2192,22 @@ export interface components {
         AddEgressGroupRequest: {
             exclude_filter?: string;
             filter?: string;
+            landing_proxy?: string;
             mode?: string;
             name: string;
             provider: string;
+        };
+        AddLandingProxyRequest: {
+            enabled?: boolean;
+            name: string;
+            password?: string;
+            port: number;
+            server: string;
+            skip_cert_verify?: boolean;
+            sni?: string;
+            tls?: boolean;
+            type?: string;
+            username?: string;
         };
         AddListenerRequest: {
             egress_group: string;
@@ -1967,6 +2239,7 @@ export interface components {
         Config: {
             admin: components["schemas"]["AdminConfig"];
             egress_groups: components["schemas"]["EgressGroup"][];
+            landing_proxies: components["schemas"]["LandingProxy"][];
             listeners: components["schemas"]["Listener"][];
             runtime: components["schemas"]["RuntimeConfig"];
             server: components["schemas"]["ServerConfig"];
@@ -1999,6 +2272,7 @@ export interface components {
             filter: string;
             health_check_url?: string;
             interval?: number;
+            landing_proxy?: string;
             mode: string;
             name: string;
             provider: string;
@@ -2018,6 +2292,7 @@ export interface components {
         GroupCandidate: {
             id: string;
             name: string;
+            nodeName?: string;
             port: number;
             server: string;
             type: string;
@@ -2032,13 +2307,44 @@ export interface components {
             candidateCount: number;
             candidates: components["schemas"]["GroupCandidate"][];
             current?: string;
+            currentValue?: string;
             filter: string;
+            landingDisabled: boolean;
+            landingMissing: boolean;
+            landingProxy?: string;
             lastHealthcheckAt?: string;
             mode: string;
             name: string;
             provider: string;
             providerDisabled: boolean;
             providerMissing: boolean;
+            routeSummary?: string;
+        };
+        LandingProxy: {
+            enabled: boolean;
+            name: string;
+            password?: string;
+            port: number;
+            server: string;
+            skip_cert_verify?: boolean;
+            sni?: string;
+            tls?: boolean;
+            type: string;
+            username?: string;
+        };
+        LandingProxyView: {
+            enabled: boolean;
+            inUseBy: string[];
+            name: string;
+            password?: string;
+            port: number;
+            routeCount: number;
+            server: string;
+            skipCertVerify: boolean;
+            sni?: string;
+            tls: boolean;
+            type: string;
+            username?: string;
         };
         Listener: {
             egress_group: string;
@@ -2058,11 +2364,14 @@ export interface components {
             currentProxy?: string;
             egressGroup: string;
             groupMissing: boolean;
+            landingDisabled: boolean;
+            landingMissing: boolean;
             listen: string;
             name: string;
             port: number;
             providerDisabled: boolean;
             providerMissing: boolean;
+            routeSummary?: string;
             status: string;
             type: string;
             udp: boolean;
@@ -2318,8 +2627,20 @@ export interface components {
         UpdateEgressGroupRequest: {
             exclude_filter?: string;
             filter?: string;
+            landing_proxy?: string;
             mode?: string;
             provider?: string;
+        };
+        UpdateLandingProxyRequest: {
+            enabled?: boolean;
+            password?: string;
+            port?: number;
+            server?: string;
+            skip_cert_verify?: boolean;
+            sni?: string;
+            tls?: boolean;
+            type?: string;
+            username?: string;
         };
         UpdateListenerRequest: {
             egress_group?: string;
