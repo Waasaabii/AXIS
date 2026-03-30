@@ -9,7 +9,7 @@
 - **节点订阅管理** — 支持 Mihomo YAML 和 Base64 两种格式的远程订阅，可在线添加、删除、刷新与预览节点
 - **出站路由群组** — 按地区正则筛选候选节点，支持 Static（手动选路）和 Dynamic（自动测速选优）两种模式
 - **入站监听器** — 灵活部署 SOCKS5 / HTTP / Mixed 多协议代理端口，支持用户名密码认证
-- **现代化 Web 控制台** — Vite + React 18 + Shadcn UI 构建的 SPA 后台，内置 Monaco 代码编辑器
+- **现代化 Web 控制台** — Vite + React 19 + Shadcn UI 构建的 SPA 后台，内置 Monaco 代码编辑器
 - **安全首次使用** — 首次安装时使用默认凭据（`admin` / `admin`），登录后强制修改密码并以安全哈希保存
 - **一键部署** — 提供自动化安装脚本与 systemd 服务管控，支持 Linux 环境开箱即用
 
@@ -44,35 +44,51 @@
 
 ## 快速开始
 
-> **零基础一条命令启动** — `start.sh` 会自动检测并安装所有缺失的依赖（Node.js、npm、mihomo、系统工具），无需手动准备环境。
+> 默认开发入口为跨平台的 `pnpm dev`。前端使用 React + Vite 开发服务器，后端单独提供 API，适用于 macOS / Linux / Windows。所有依赖安装、脚本执行和工作区管理都在仓库根目录完成。
 
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/your-org/ProxyRelay.git
-cd ProxyRelay
+git clone https://github.com/Waasaabii/AXIS.git
+cd AXIS
 ```
 
-### 2. 一键启动
+### 2. 安装依赖
 
 ```bash
-./start.sh
+pnpm install
 ```
 
-脚本会自动完成以下全部步骤：
+### 3. 启动开发环境
+
+```bash
+pnpm dev
+```
+
+该命令会完成：
 
 | 步骤 | 动作 |
 |------|------|
-| 环境自检 | 检测 Node.js、npm、mihomo、curl、perl、sed、ss |
-| 自动安装 | 缺失的依赖将通过包管理器或 GitHub Release 自动安装 |
-| 项目依赖 | 自动执行 `npm install` (后端 + 前端) |
-| 前端构建 | 自动执行 `npm run build:ui` |
-| 端口检查 | 检测并清理冲突的残留进程 |
-| 双进程启动 | 先启动 mihomo 数据面，再启动 ProxyRelay 控制面 |
+| 本地配置 | 基于 `config/proxyrelay.yaml` 或模板生成 `runtime/dev/proxyrelay.dev.yaml` |
+| 后端启动 | 启动 AXIS 控制面 API，并监听 `8787` |
+| 前端启动 | 启动 React + Vite 开发服务器，并监听 `5173` |
+| 前后端联调 | Vite 自动将 `/api/*` 代理到后端，无需额外 CORS 配置 |
 
-### 3. 访问控制台
+### Repo 管理方式
 
-浏览器打开 `http://127.0.0.1:8787`
+- 根目录使用 `pnpm workspace` 统一管理所有 Node 依赖和脚本
+- 不需要进入 `frontend/` 单独执行安装或开发命令
+- 前端工作区名为 `@axis/frontend`，但日常使用只需要在根目录执行 `pnpm dev`、`pnpm build`、`pnpm lint`
+
+如需联动本地 Mihomo，可使用：
+
+```bash
+pnpm dev:managed
+```
+
+### 4. 访问控制台
+
+浏览器打开 `http://127.0.0.1:5173`
 
 首次登录使用默认凭据：
 
@@ -84,23 +100,24 @@ cd ProxyRelay
 
 ### 环境变量
 
-`start.sh` 支持通过环境变量自定义行为：
+开发脚本支持通过环境变量自定义行为：
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `MIHOMO_BIN` | `/usr/local/bin/mihomo` | mihomo 二进制路径 |
-| `MIHOMO_VERSION` | `v1.19.21` | 自动安装时的 mihomo 版本 |
-| `SERVER_HOST` | `0.0.0.0` | 控制面监听地址 |
-| `SERVER_PORT` | `8787` | 控制面监听端口 |
-| `CONTROLLER_HOST` | `127.0.0.1` | mihomo API 地址 |
-| `CONTROLLER_PORT` | `11235` | mihomo API 端口 |
-| `CONTROLLER_SECRET` | `proxyrelay-local-secret` | mihomo API 密钥 |
+| `AXIS_SERVER_HOST` | `127.0.0.1` | 控制面监听地址 |
+| `AXIS_SERVER_PORT` | `8787` | 控制面监听端口 |
+| `AXIS_UI_HOST` | `127.0.0.1` | React 开发服务器监听地址 |
+| `AXIS_UI_PORT` | `5173` | React 开发服务器端口 |
+| `AXIS_CONTROLLER_HOST` | `127.0.0.1` | Mihomo API 地址 |
+| `AXIS_CONTROLLER_PORT` | `11235` | Mihomo API 端口 |
+| `AXIS_CONTROLLER_SECRET` | `proxyrelay-local-secret` | Mihomo API 密钥 |
+| `AXIS_MIHOMO_BIN` | `mihomo` | Mihomo 二进制路径，仅 `pnpm dev:managed` 使用 |
 
 ---
 
 ## 配置文件
 
-> ⚠️ **`config/proxyrelay.yaml` 已被 `.gitignore` 排除**，不会提交到版本控制。仓库中只保留 `config/proxyrelay.example.yaml` 作为模板。首次运行 `./start.sh` 或 `sudo ./service.sh install` 时会自动从模板生成配置文件。
+> ⚠️ **`config/proxyrelay.yaml` 已被 `.gitignore` 排除**，不会提交到版本控制。仓库中只保留 `config/proxyrelay.example.yaml` 作为模板。首次运行 `pnpm dev` 或 `sudo ./service.sh install` 时会自动从模板生成本地配置。
 
 核心配置文件为 `config/proxyrelay.yaml`（或系统部署时为 `/etc/proxyrelay/proxyrelay.yaml`）。
 
@@ -159,7 +176,7 @@ listeners:
 生成密码哈希的命令行方式：
 
 ```bash
-npm run hash-password -- <your-password>
+pnpm run hash-password -- <your-password>
 ```
 
 ### 开源分发
@@ -208,6 +225,7 @@ npm run hash-password -- <your-password>
 仅做配置渲染，不要求 Mihomo 运行。适合：
 
 - 前端开发调试
+- React 页面联调
 - 配置预审
 
 在 `proxyrelay.yaml` 中设置：
@@ -235,7 +253,7 @@ runtime:
 
 ## 系统服务部署 (systemd)
 
-项目自带 `service.sh` 脚本，可将 AXIS 注册为系统服务并管理其生命周期。
+项目自带 `service.sh` 脚本，可将 AXIS 注册为 systemd 服务并管理其生命周期。
 
 ### 一键安装为系统服务
 
@@ -246,9 +264,10 @@ sudo ./service.sh install
 `install` 命令会自动完成：
 
 - ✅ 检测并安装 Node.js、mihomo 等依赖
+- ✅ 通过 corepack 准备 `pnpm`
 - ✅ 创建 `proxyrelay` 系统用户与安全目录
 - ✅ 生成生产配置文件 `/etc/proxyrelay/proxyrelay.yaml`
-- ✅ 安装后端依赖并构建前端
+- ✅ 安装工作区依赖并构建前端
 - ✅ 渲染初始运行态配置
 - ✅ 注册 `proxyrelayd` 与 `mihomo` 两个 systemd 服务
 
@@ -307,20 +326,21 @@ node src/index.js preflight --json
 ## 项目结构
 
 ```
-ProxyRelay/
+AXIS/
 ├── config/
 │   └── proxyrelay.example.yaml  # 配置模板 (首次运行自动生成 proxyrelay.yaml)
 ├── deploy/
 │   ├── install-ubuntu.sh     # Ubuntu 安装脚本 (legacy)
-│   ├── start-local.sh        # 本地联调启动脚本 (被 start.sh 调用)
 │   ├── proxyrelayd.service   # systemd 控制面服务模板
 │   └── mihomo.service        # systemd 数据面服务模板
 ├── docs/                     # 补充文档
-├── frontend/                 # React SPA 前端
+├── frontend/                 # React SPA 前端工作区 (@axis/frontend)
 │   └── src/
 │       ├── pages/            # 页面组件
 │       ├── layouts/          # 布局组件
 │       └── components/       # UI 组件库
+├── scripts/
+│   └── dev.mjs               # 跨平台本地开发入口
 ├── runtime/                  # 运行时产物（自动生成）
 ├── src/
 │   ├── index.js              # 入口与 CLI
@@ -337,7 +357,7 @@ ProxyRelay/
 │       └── subscription-service.js
 ├── test/                     # 测试用例
 ├── package.json
-├── start.sh                  # ⚡ 一键启动 (自动安装依赖 + 前台运行)
+├── pnpm-workspace.yaml       # pnpm 工作区配置
 ├── service.sh                # 🔧 系统服务管理 (install/start/stop/restart)
 └── README.md
 ```
@@ -347,8 +367,14 @@ ProxyRelay/
 ## 常用命令
 
 ```bash
-# ⚡ 一键启动 (自动检测 + 安装依赖 + 启动双进程)
-./start.sh
+# 安装依赖
+pnpm install
+
+# 启动 React 前端 + AXIS API
+pnpm dev
+
+# 启动 React 前端 + AXIS API + Mihomo
+pnpm dev:managed
 
 # 🔧 注册为系统服务
 sudo ./service.sh install
@@ -358,23 +384,27 @@ sudo ./service.sh restart
 sudo ./service.sh status
 sudo ./service.sh logs
 
-# 仅启动控制面 (render-only，无需 mihomo)
-npm start
+# 仅启动控制面（已构建前端）
+pnpm start
 
-# 开发热更
-npm run dev
+# 单独启动后端 / 前端
+pnpm run dev:server
+pnpm run dev:ui
 
-# 构建前端
-npm run build:ui
+# 构建前端静态资源
+pnpm run build:ui
+
+# 前端代码检查
+pnpm run lint
 
 # 运行测试
-npm test
+pnpm test
 
 # 生成密码哈希
-npm run hash-password -- <password>
+pnpm run hash-password -- <password>
 
 # 运行预检
-npm run preflight
+pnpm run preflight
 ```
 
 ---
@@ -385,7 +415,7 @@ npm run preflight
 |----------|------------------------------------------------|
 | 控制面   | Node.js (原生 HTTP, ESM)                        |
 | 数据面   | Mihomo                                          |
-| 前端     | React 18 + Vite + Shadcn UI + Lucide Icons     |
+| 前端     | React 19 + Vite + Shadcn UI + Lucide Icons     |
 | 编辑器   | Monaco Editor                                   |
 | 认证     | Scrypt 密码哈希 + Cookie Session                |
 | 配置     | YAML (proxyrelay.yaml → mihomo.yaml 渲染)      |

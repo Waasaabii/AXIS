@@ -4,3 +4,4 @@ runtime/
 config/runtime/
 *.log
 .DS_Store
+.ace-tool/

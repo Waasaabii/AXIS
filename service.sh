@@ -74,6 +74,21 @@ ensure_nodejs() {
   ok "Node.js 已安装: $(node --version)"
 }
 
+ensure_pnpm() {
+  if command -v pnpm >/dev/null 2>&1; then
+    ok "pnpm 已安装: $(pnpm --version)"
+    return
+  fi
+  if ! command -v corepack >/dev/null 2>&1; then
+    err "未找到 corepack，无法安装 pnpm"
+    exit 1
+  fi
+  log "安装 pnpm ..."
+  corepack enable
+  corepack prepare pnpm@10.32.1 --activate
+  ok "pnpm 已安装: $(pnpm --version)"
+}
+
 ensure_mihomo() {
   if [[ -x "${MIHOMO_BIN}" ]]; then
     ok "mihomo 已安装: $("${MIHOMO_BIN}" -v 2>&1 | head -1)"
@@ -121,6 +136,7 @@ cmd_install() {
   # ── 1. dependencies
   log "检查系统依赖..."
   ensure_nodejs
+  ensure_pnpm
   ensure_mihomo
 
   for cmd in curl ss; do
@@ -173,9 +189,9 @@ cmd_install() {
 
   # ── 4. npm deps & frontend build
   log "安装项目依赖..."
-  (cd "${APP_DIR}" && npm install --production >/dev/null 2>&1)
+  (cd "${APP_DIR}" && pnpm install --frozen-lockfile >/dev/null 2>&1)
   log "构建前端..."
-  (cd "${APP_DIR}" && npm run build:ui >/dev/null 2>&1)
+  (cd "${APP_DIR}" && pnpm run build:ui >/dev/null 2>&1)
   chown -R "${PROXYRELAY_USER}:${PROXYRELAY_GROUP}" "${APP_DIR}/frontend/dist" 2>/dev/null || true
   ok "项目构建完成"
 

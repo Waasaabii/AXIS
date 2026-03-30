@@ -1,16 +1,23 @@
 {
-  "name": "proxyrelay",
+  "name": "axis",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "ProxyRelay control plane for mihomo-based SOCKS5 relay gateway",
+  "packageManager": "pnpm@10.32.1",
+  "description": "AXIS control plane for mihomo-based SOCKS5 relay gateway",
   "scripts": {
-    "start": "node src/index.js serve",
-    "dev": "node --watch src/index.js serve",
-    "test": "node --test",
+    "build": "pnpm run build:ui",
+    "build:ui": "pnpm --filter @axis/frontend build",
+    "dev": "node scripts/dev.mjs",
+    "dev:managed": "node scripts/dev.mjs --managed",
+    "dev:server": "node --watch src/index.js serve",
+    "dev:ui": "pnpm --filter @axis/frontend dev",
     "hash-password": "node src/index.js hash-password",
+    "lint": "pnpm --filter @axis/frontend lint",
     "preflight": "node src/index.js preflight",
-    "build:ui": "cd frontend && npm install && npm run build"
+    "preview:ui": "pnpm --filter @axis/frontend preview",
+    "start": "node src/index.js serve",
+    "test": "node --test"
   },
   "dependencies": {
     "yaml": "^2.8.2"

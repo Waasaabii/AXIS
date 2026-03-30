@@ -19,6 +19,20 @@ PROXYRELAY_GROUP="${PROXYRELAY_GROUP:-${PROXYRELAY_USER}}"
 MIHOMO_BIN="${MIHOMO_BIN:-/usr/local/bin/mihomo}"
 CONFIG_FILE="${CONFIG_DIR}/proxyrelay.yaml"
 
+ensure_pnpm() {
+  if command -v pnpm >/dev/null 2>&1; then
+    return
+  fi
+
+  if ! command -v corepack >/dev/null 2>&1; then
+    echo "未找到 corepack，无法安装 pnpm。" >&2
+    exit 1
+  fi
+
+  corepack enable
+  corepack prepare pnpm@10.32.1 --activate
+}
+
 require_file() {
   local target="$1"
   if [[ ! -f "${target}" ]]; then
@@ -70,7 +84,8 @@ chmod 600 "${CONFIG_FILE}"
 
 # Build frontend UI
 echo "正在构建前端资源..."
-cd "${APP_DIR}" && npm run build:ui
+ensure_pnpm
+cd "${APP_DIR}" && pnpm install --frozen-lockfile && pnpm run build:ui
 
 render_template "${PROJECT_DIR}/deploy/proxyrelayd.service" "${SERVICE_DIR}/proxyrelayd.service"
 render_template "${PROJECT_DIR}/deploy/mihomo.service" "${SERVICE_DIR}/mihomo.service"
