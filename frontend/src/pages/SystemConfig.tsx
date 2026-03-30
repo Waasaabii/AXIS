@@ -6,6 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { NoticeCard } from '@/components/NoticeCard'
+import { PageHeader } from '@/components/PageHeader'
 import { Save, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -89,25 +91,32 @@ export default function SystemConfig() {
 
   return (
     <div className="space-y-6 h-[calc(100vh-8rem)] flex flex-col">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">系统配置</h1>
-        <p className="text-zinc-500">管理基础配置、管理员密码，以及当前使用的代理核心版本。</p>
-      </div>
+      <PageHeader
+        eyebrow="System"
+        title="系统与核心"
+        description="这里放的是低频但关键的设置，比如管理员密码、高级配置内容和 Mihomo 版本。日常使用时，你大多数时候不需要停留在这里。"
+      />
+
+      <NoticeCard
+        icon={<RefreshCw className="h-4 w-4" />}
+        title="什么时候需要来这个页面"
+        description="只有在你要修改管理员密码、直接编辑高级配置，或者切换 Mihomo 版本时，才需要进入这里。其他日常操作尽量在订阅、线路和本地入口页面完成。"
+      />
 
       <Tabs defaultValue="editor" className="flex-1 flex flex-col min-h-0">
         <TabsList className="grid w-[620px] grid-cols-4">
-          <TabsTrigger value="editor">基础配置</TabsTrigger>
-          <TabsTrigger value="rendered">生成结果预览</TabsTrigger>
+          <TabsTrigger value="editor">高级配置</TabsTrigger>
+          <TabsTrigger value="rendered">当前生成结果</TabsTrigger>
           <TabsTrigger value="password">管理员密码</TabsTrigger>
-          <TabsTrigger value="mihomo">代理核心版本</TabsTrigger>
+          <TabsTrigger value="mihomo">Mihomo 版本</TabsTrigger>
         </TabsList>
         
         <TabsContent value="editor" className="flex-1 flex flex-col mt-4 min-h-0">
           <Card className="flex-1 flex flex-col min-h-0 overflow-hidden border-zinc-200">
             <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between bg-zinc-50/50 shrink-0">
               <div>
-                <CardTitle className="text-sm">配置文件（高级）</CardTitle>
-                <CardDescription className="text-xs">当前配置文件位置：{configData?.path || '加载中...'}</CardDescription>
+                <CardTitle className="text-sm">高级配置内容</CardTitle>
+                <CardDescription className="text-xs">适合已经明确知道自己要改什么的时候再操作。当前文件位置：{configData?.path || '加载中...'}</CardDescription>
               </div>
               <Button size="sm" onClick={handleSave} disabled={isSaving}>
                 <Save className="h-4 w-4 mr-2" />
@@ -141,7 +150,7 @@ export default function SystemConfig() {
           <Card className="flex-1 flex flex-col min-h-0 overflow-hidden border-zinc-200">
             <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between bg-zinc-50/50 shrink-0">
               <div>
-                <CardTitle className="text-sm">当前生成的代理核心配置</CardTitle>
+                <CardTitle className="text-sm">当前生成给 Mihomo 的配置</CardTitle>
                 <CardDescription className="text-xs">
                   最近生成时间: {renderedData?.updatedAt ? format(new Date(renderedData.updatedAt), 'PP HH:mm:ss', { locale: zhCN }) : '加载中...'}
                 </CardDescription>
@@ -235,7 +244,7 @@ export default function SystemConfig() {
           <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
             <Card className="border-zinc-200">
               <CardHeader className="py-4 border-b bg-zinc-50/50">
-                <CardTitle className="text-base">支持版本矩阵</CardTitle>
+                <CardTitle className="text-base">可用版本列表</CardTitle>
                 <CardDescription className="text-xs">
                   当前系统: {versionsData?.platform?.os || "unknown"} / {versionsData?.platform?.arch || "unknown"}，
                   推荐版本: {versionsData?.recommended || "未知"}
@@ -310,8 +319,8 @@ export default function SystemConfig() {
             <div className="space-y-4">
               <Card className="border-zinc-200">
                 <CardHeader className="py-4 border-b bg-zinc-50/50">
-                  <CardTitle className="text-base">当前正在使用的版本</CardTitle>
-                  <CardDescription className="text-xs">
+                <CardTitle className="text-base">当前正在使用的版本</CardTitle>
+                <CardDescription className="text-xs">
                     激活后，程序会自动切换到对应的代理核心可执行文件。
                   </CardDescription>
                 </CardHeader>

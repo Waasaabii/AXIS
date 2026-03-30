@@ -1,24 +1,27 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Activity, Link as LinkIcon, Network, Radio, Settings, FileText, LogOut, RefreshCw, Wrench } from 'lucide-react';
+import { LayoutDashboard, Activity, Link as LinkIcon, Network, Radio, Settings, FileText, LogOut, RefreshCw, Wrench, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import useSWR from 'swr';
 import { api, ApiError, type SessionStatusResponse, type SetupStateResponse } from '@/services/api';
-import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { NoticeCard } from '@/components/NoticeCard';
 
 const navItems = [
-  { name: '总览', path: '/dashboard', icon: LayoutDashboard },
-  { name: '状态', path: '/status', icon: Activity },
-  { name: '订阅管理', path: '/subscriptions', icon: LinkIcon },
-  { name: '出口管理', path: '/interfaces', icon: Network },
-  { name: '入口管理', path: '/listeners', icon: Radio },
-  { name: '系统配置', path: '/system', icon: Settings },
-  { name: '事件日志', path: '/events', icon: FileText },
+  { name: '总览', path: '/dashboard', icon: LayoutDashboard, description: '先看系统现在是否可用，以及接下来最该处理什么。' },
+  { name: '运行状态', path: '/status', icon: Activity, description: '检查代理核心、目录和运行环境是否准备就绪。' },
+  { name: '订阅与节点', path: '/subscriptions', icon: LinkIcon, description: '导入服务商订阅，让可用节点进入 AXIS。' },
+  { name: '出口线路', path: '/interfaces', icon: Network, description: '把节点整理成常用线路，方便后续绑定入口。' },
+  { name: '本地入口', path: '/listeners', icon: Radio, description: '创建可供浏览器、设备或应用连接的本地代理入口。' },
+  { name: '系统与核心', path: '/system', icon: Settings, description: '管理管理员密码、高级配置和 Mihomo 版本。' },
+  { name: '操作记录', path: '/events', icon: FileText, description: '查看最近发生了什么，以及哪里可能需要处理。' },
 ];
 
 export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [navOpen, setNavOpen] = useState(false);
 
   const { data: session, error: sessionError } = useSWR<SessionStatusResponse, ApiError>('/api/session', api.getSession, {
     onErrorRetry: (error: ApiError) => {
@@ -46,6 +49,16 @@ export default function AppLayout() {
     }
   }, [session, setupState, location.pathname, navigate]);
 
+  const currentPage = useMemo(() => {
+    if (location.pathname === '/setup') {
+      return {
+        name: '首次初始化',
+        description: '先完成最少的准备项，再继续配置和使用。',
+      };
+    }
+    return navItems.find((item) => item.path === location.pathname) ?? navItems[0];
+  }, [location.pathname]);
+
   const handleLogout = async () => {
     try {
       await api.logout();
@@ -69,72 +82,147 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-50/50">
-      {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 w-64 border-r bg-white pb-10">
-        <div className="flex h-16 items-center px-6 border-b">
-          <span className="text-sm font-bold tracking-widest text-zinc-800 uppercase">A X I S</span>
-        </div>
-        <div className="px-4 py-6">
-          <h2 className="mb-2 px-2 text-lg font-semibold tracking-tight">控制台</h2>
-          {setupState?.required && (
-            <Link
-              to="/setup"
-              className={`mb-3 flex items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                location.pathname === '/setup'
-                  ? 'border-amber-300 bg-amber-50 text-amber-700'
-                  : 'border-amber-200 bg-amber-50/70 text-amber-700 hover:bg-amber-100'
-              }`}
-            >
-              <Wrench className="h-4 w-4" />
-              首次初始化
-            </Link>
-          )}
-          <nav className="space-y-1">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.96),_rgba(244,244,245,0.94)_38%,_rgba(244,244,245,0.9)_100%)]">
+      <div className="mx-auto flex min-h-screen max-w-[1600px]">
+        <aside className="hidden w-72 shrink-0 border-r border-zinc-200/80 bg-white/80 px-5 py-6 backdrop-blur xl:flex xl:flex-col">
+          <div className="space-y-1 px-3 pb-6">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-zinc-400">AXIS Console</div>
+            <div className="text-lg font-semibold tracking-tight text-zinc-950">控制台</div>
+            <p className="text-sm leading-6 text-zinc-500">用更少的步骤，完成订阅导入、线路整理和本地入口配置。</p>
+          </div>
+          <div className="space-y-1">
+            {setupState?.required && (
+              <Link
+                to="/setup"
+                className={`mb-3 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm transition-colors ${
+                  location.pathname === '/setup'
+                    ? 'border-amber-300 bg-amber-50 text-amber-800'
+                    : 'border-amber-200 bg-amber-50/70 text-amber-700 hover:bg-amber-100'
+                }`}
+              >
+                <Wrench className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="space-y-0.5">
+                  <div className="font-medium">首次初始化</div>
+                  <div className="text-xs leading-5 text-amber-700">先把密码、订阅和本地入口准备好。</div>
+                </div>
+              </Link>
+            )}
+            <nav className="space-y-1">
+              {navItems.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-start gap-3 rounded-2xl px-4 py-3 transition-colors ${
+                      isActive
+                        ? 'bg-zinc-950 text-white shadow-sm'
+                        : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'
+                    }`}
+                  >
+                    <item.icon className={`mt-0.5 h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
+                    <div className="space-y-0.5">
+                      <div className="text-sm font-medium">{item.name}</div>
+                      <div className={`text-xs leading-5 ${isActive ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                        {item.description}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1">
+          <header className="sticky top-0 z-20 border-b border-zinc-200/70 bg-white/80 backdrop-blur-xl">
+            <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+              <div className="flex min-w-0 items-center gap-3">
+                <Button variant="outline" size="icon" className="xl:hidden" onClick={() => setNavOpen(true)}>
+                  <Menu className="h-4 w-4" />
+                </Button>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-zinc-950">{currentPage.name}</div>
+                  <div className="truncate text-sm text-zinc-500">{currentPage.description}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleReloadRuntime}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  让当前更改生效
+                </Button>
+                <Button variant="ghost" size="sm" className="text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900" onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  退出
+                </Button>
+              </div>
+            </div>
+          </header>
+
+          <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+            {setupState?.required && location.pathname !== '/setup' ? (
+              <NoticeCard
+                tone="warning"
+                icon={<Wrench className="h-4 w-4" />}
+                title="还没完成首次初始化"
+                description="当前可以先继续查看页面，但建议先完成密码、订阅和本地入口设置，避免后续步骤反复跳转。"
+                action={
+                  <Button asChild size="sm">
+                    <Link to="/setup">继续完成初始化</Link>
+                  </Button>
+                }
+              />
+            ) : null}
+            <Outlet />
+          </div>
+        </main>
+      </div>
+
+      <Dialog open={navOpen} onOpenChange={setNavOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-0">
+          <DialogHeader className="border-b border-zinc-200 px-5 py-5">
+            <DialogTitle className="text-left text-lg">AXIS</DialogTitle>
+            <DialogDescription className="text-left">
+              选择你现在要处理的任务。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1 px-3 py-3">
+            {setupState?.required ? (
+              <Link
+                to="/setup"
+                className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+              >
+                <Wrench className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="space-y-0.5">
+                  <div className="font-medium">首次初始化</div>
+                  <div className="text-xs leading-5 text-amber-700">先把最少必需项配好，再回来继续操作。</div>
+                </div>
+              </Link>
+            ) : null}
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-zinc-100 text-zinc-900'
-                      : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'
-                  }`}
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setNavOpen(false)}
+                    className={`flex items-start gap-3 rounded-2xl px-4 py-3 ${
+                      isActive ? 'bg-zinc-950 text-white' : 'text-zinc-700 hover:bg-zinc-100'
+                    }`}
                 >
-                  <item.icon className="h-4 w-4" />
-                  {item.name}
+                  <item.icon className={`mt-0.5 h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-medium">{item.name}</div>
+                    <div className={`text-xs leading-5 ${isActive ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                      {item.description}
+                    </div>
+                  </div>
                 </Link>
               );
             })}
-          </nav>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="pl-64 flex-1">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-white/80 px-8 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-zinc-500">
-              {location.pathname === '/setup' ? '首次初始化' : navItems.find((i) => i.path === location.pathname)?.name}
-            </span>
           </div>
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" onClick={handleReloadRuntime}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              应用当前配置
-            </Button>
-            <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              退出登录
-            </Button>
-          </div>
-        </header>
-        <div className="p-8">
-          <Outlet />
-        </div>
-      </main>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

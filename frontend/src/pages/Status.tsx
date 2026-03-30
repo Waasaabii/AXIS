@@ -2,6 +2,8 @@ import useSWR from 'swr'
 import { api, ApiError } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { NoticeCard } from '@/components/NoticeCard'
+import { PageHeader } from '@/components/PageHeader'
 import { toast } from 'sonner'
 import { CheckCircle2, AlertTriangle, XCircle, RefreshCw } from 'lucide-react'
 import { format } from 'date-fns'
@@ -33,10 +35,17 @@ export default function Status() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">状态与预检</h1>
-        <p className="text-zinc-500">查看代理核心连接情况，以及当前环境是否已经可以正常使用。</p>
-      </div>
+      <PageHeader
+        eyebrow="Runtime"
+        title="先看系统能不能真正跑起来"
+        description="这里主要回答两个问题：AXIS 有没有连上 Mihomo，以及当前目录、配置和运行环境是否已经准备好。"
+      />
+
+      <NoticeCard
+        icon={<AlertTriangle className="h-4 w-4" />}
+        title="什么时候需要来这个页面"
+        description="如果你发现节点刷新不了、入口连不上、配置改完不生效，优先先看这里。大多数环境和运行问题都能在这个页面先定位到。"
+      />
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Controller Status */}
@@ -44,7 +53,7 @@ export default function Status() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
               <CardTitle>代理核心连接</CardTitle>
-              <CardDescription>检查 AXIS 是否已经连上 Mihomo</CardDescription>
+              <CardDescription>确认 AXIS 现在能不能接管代理核心</CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={handleProbe}>
               重新检测
@@ -57,12 +66,12 @@ export default function Status() {
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <div className={`h-2.5 w-2.5 rounded-full ${controller.reachable ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span className="font-medium">{controller.reachable ? '连接正常' : '暂时未连接'}</span>
+                    <span className="font-medium">{controller.reachable ? '连接正常' : '暂时还没连上'}</span>
                   <span className="text-sm text-zinc-500 ml-2">({formatMode(controller.mode, controller.renderOnly)})</span>
                 </div>
                 <div className="bg-zinc-50 rounded-lg p-4 text-sm overflow-auto max-h-[300px]">
                   <div className="flex py-1 border-b border-zinc-100">
-                    <span className="text-zinc-500 w-28 shrink-0">连接地址</span>
+                    <span className="text-zinc-500 w-28 shrink-0">控制器地址</span>
                     <span className="text-zinc-900 break-all font-mono">{controller.baseUrl || '未配置'}</span>
                   </div>
                   <div className="flex py-1 border-b border-zinc-100">
@@ -92,7 +101,7 @@ export default function Status() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
               <CardTitle>使用前检查</CardTitle>
-              <CardDescription>确认配置、目录和代理核心状态是否已准备好</CardDescription>
+              <CardDescription>确认目录、配置和代理核心状态是否已经准备好</CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={handleRefreshPreflight}>
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -142,7 +151,7 @@ export default function Status() {
 
                 {preflight.recommendations?.length > 0 && (
                   <div className="mt-4 pt-4 border-t">
-                    <h4 className="text-sm font-medium mb-2">建议处理</h4>
+                    <h4 className="text-sm font-medium mb-2">建议你先处理这些项</h4>
                     <ul className="text-sm text-zinc-600 space-y-1 list-disc pl-4">
                       {preflight.recommendations.map((rec: string, i: number) => (
                         <li key={i}>{rec}</li>

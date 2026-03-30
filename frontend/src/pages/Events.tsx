@@ -1,8 +1,11 @@
 import useSWR from 'swr'
 import { api, type EventEntry } from '@/services/api'
+import { EmptyStateCard } from '@/components/EmptyStateCard'
+import { PageHeader } from '@/components/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
+import { FileText } from 'lucide-react'
 
 const levelLabelMap: Record<string, string> = {
   error: '问题',
@@ -14,7 +17,7 @@ const scopeLabelMap: Record<string, string> = {
   auth: '登录',
   config: '配置',
   controller: '代理核心连接',
-  group: '出口组',
+  group: '出口线路',
   healthcheck: '健康检查',
   provider: '订阅',
   'provider-test': '订阅测试',
@@ -33,6 +36,8 @@ function sanitizeEventMessage(message: string) {
     .replace('当前为 render-only 模式，未接入运行态 controller。', '当前只保存配置，还没有接管代理核心。')
     .replace(/^controller 返回 (\d+)$/, '连接代理核心失败（状态码 $1）')
     .replace(/^controller 可达$/, '代理核心连接正常')
+    .replace(/出口组/g, '出口线路')
+    .replace(/入口监听/g, '本地入口')
 }
 
 export default function Events() {
@@ -48,17 +53,24 @@ export default function Events() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">事件日志</h1>
-        <p className="text-zinc-500">查看服务运行过程中的重要变化和提醒。</p>
-      </div>
+      <PageHeader
+        eyebrow="History"
+        title="看看最近到底发生了什么"
+        description="这里记录的是 AXIS 最近的重要变化、提醒和失败原因。改完配置以后，如果结果和预期不一样，先来这里看。"
+      />
 
       <Card className="shadow-sm border-zinc-200">
         <CardContent className="p-0">
           {!events ? (
             <div className="p-8 text-center text-sm text-zinc-500">加载中...</div>
           ) : events.length === 0 ? (
-            <div className="p-8 text-center text-sm text-zinc-500">暂无事件记录。</div>
+            <div className="p-6">
+              <EmptyStateCard
+                icon={<FileText className="h-5 w-5" />}
+                title="暂时还没有操作记录"
+                description="这通常表示你刚启动系统，或者最近还没有执行订阅刷新、配置保存、入口变更这类操作。"
+              />
+            </div>
           ) : (
             <div className="divide-y divide-zinc-100">
               {events.map((event: EventEntry, idx: number) => (
