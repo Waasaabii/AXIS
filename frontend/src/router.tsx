@@ -7,6 +7,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Status = lazy(() => import('./pages/Status'));
 const Subscriptions = lazy(() => import('./pages/Subscriptions'));
 const Interfaces = lazy(() => import('./pages/Interfaces'));
+const TransitRoutes = lazy(() => import('./pages/TransitRoutes'));
 const Listeners = lazy(() => import('./pages/Listeners'));
 const SystemConfig = lazy(() => import('./pages/SystemConfig'));
 const Events = lazy(() => import('./pages/Events'));
@@ -43,6 +44,7 @@ const router = createBrowserRouter([
       { path: 'status', element: renderLazyPage(Status) },
       { path: 'subscriptions', element: renderLazyPage(Subscriptions) },
       { path: 'interfaces', element: renderLazyPage(Interfaces) },
+      { path: 'transits', element: renderLazyPage(TransitRoutes) },
       { path: 'listeners', element: renderLazyPage(Listeners) },
       { path: 'system', element: renderLazyPage(SystemConfig) },
       { path: 'events', element: renderLazyPage(Events) },

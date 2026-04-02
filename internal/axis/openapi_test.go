@@ -15,7 +15,7 @@ func TestBuildOpenAPISpecIncludesTypedContracts(t *testing.T) {
 		t.Fatal("schemas 缺失")
 	}
 
-	for _, name := range []string{"Config", "StatusResponse", "MihomoVersionsResponse"} {
+	for _, name := range []string{"Config", "StatusResponse", "MihomoVersionsResponse", "DynamicProxyHealthResponse", "DynamicProxyNextResponse"} {
 		if _, exists := schemas[name]; !exists {
 			t.Fatalf("schema %s 缺失", name)
 		}
@@ -27,6 +27,8 @@ func TestBuildOpenAPISpecIncludesTypedContracts(t *testing.T) {
 	}
 
 	for _, pathname := range []string{
+		"/api/health",
+		"/api/proxy/next",
 		"/api/config",
 		"/api/session",
 		"/api/mihomo/versions/{version}/activate",

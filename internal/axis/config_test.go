@@ -60,3 +60,104 @@ func TestValidateConfigRejectsUnknownLandingProxy(t *testing.T) {
 		t.Fatalf("expected unknown landing proxy error, got %v", err)
 	}
 }
+
+func TestValidateConfigAcceptsManualProviderWithoutURL(t *testing.T) {
+	config := &Config{
+		Server: ServerConfig{Host: "127.0.0.1", Port: 8787},
+		Admin:  AdminConfig{Username: "admin", Password: "admin", SessionTTLHours: 12},
+		Runtime: RuntimeConfig{
+			Workdir:            "../runtime",
+			MihomoBinary:       "mihomo",
+			ExternalController: "http://127.0.0.1:9090",
+			RenderOnly:         true,
+		},
+		Subscriptions: []Subscription{{Name: "tokyo-fixed", Type: "socks5", Server: "proxy.example.com", Port: 9001, Enabled: true}},
+		EgressGroups:  []EgressGroup{{Name: "egress-fixed", Provider: "tokyo-fixed", Mode: "manual"}},
+		Listeners:     []Listener{{Name: "fixed-socks", Port: 10801, EgressGroup: "egress-fixed", Enabled: true, UDP: true}},
+	}
+
+	if err := ValidateConfig(config); err != nil {
+		t.Fatalf("ValidateConfig() error = %v", err)
+	}
+}
+
+func TestValidateConfigRejectsFallbackGroupWithoutProxies(t *testing.T) {
+	config := &Config{
+		Server: ServerConfig{Host: "127.0.0.1", Port: 8787},
+		Admin:  AdminConfig{Username: "admin", Password: "admin", SessionTTLHours: 12},
+		Runtime: RuntimeConfig{
+			Workdir:            "../runtime",
+			MihomoBinary:       "mihomo",
+			ExternalController: "http://127.0.0.1:9090",
+			RenderOnly:         true,
+		},
+		Subscriptions: []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true}},
+		EgressGroups:  []EgressGroup{{Name: "egress-hk-fallback", Provider: "airport-main", Mode: "fallback"}},
+		Listeners:     []Listener{{Name: "hk-socks", Port: 10801, EgressGroup: "egress-hk-fallback", Enabled: true, UDP: true}},
+	}
+
+	if err := ValidateConfig(config); err == nil || !strings.Contains(err.Error(), "顺序容灾组 egress-hk-fallback 至少需要选择一个节点") {
+		t.Fatalf("expected fallback proxy validation error, got %v", err)
+	}
+}
+
+func TestValidateConfigAcceptsTransitRouteAndTransitListener(t *testing.T) {
+	config := &Config{
+		Server: ServerConfig{Host: "127.0.0.1", Port: 8787},
+		Admin:  AdminConfig{Username: "admin", Password: "admin", SessionTTLHours: 12},
+		Runtime: RuntimeConfig{
+			Workdir:            "../runtime",
+			MihomoBinary:       "mihomo",
+			ExternalController: "http://127.0.0.1:9090",
+			RenderOnly:         true,
+		},
+		Subscriptions: []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true}},
+		EgressGroups:  []EgressGroup{{Name: "egress-hk", Provider: "airport-main", Mode: "manual"}},
+		TransitRoutes: []TransitRoute{{
+			Name:              "hk-transit",
+			Enabled:           true,
+			UpstreamProvider:  "airport-main",
+			UpstreamProxyName: "HK 01",
+			EgressGroup:       "egress-hk",
+		}},
+		Listeners: []Listener{{
+			Name:         "transit-socks",
+			Port:         10801,
+			Enabled:      true,
+			UDP:          true,
+			RouteMode:    "transit",
+			TransitRoute: "hk-transit",
+		}},
+	}
+
+	if err := ValidateConfig(config); err != nil {
+		t.Fatalf("ValidateConfig() error = %v", err)
+	}
+}
+
+func TestValidateConfigRejectsUnknownTransitRoute(t *testing.T) {
+	config := &Config{
+		Server: ServerConfig{Host: "127.0.0.1", Port: 8787},
+		Admin:  AdminConfig{Username: "admin", Password: "admin", SessionTTLHours: 12},
+		Runtime: RuntimeConfig{
+			Workdir:            "../runtime",
+			MihomoBinary:       "mihomo",
+			ExternalController: "http://127.0.0.1:9090",
+			RenderOnly:         true,
+		},
+		Subscriptions: []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true}},
+		EgressGroups:  []EgressGroup{{Name: "egress-hk", Provider: "airport-main", Mode: "manual"}},
+		Listeners: []Listener{{
+			Name:         "transit-socks",
+			Port:         10801,
+			Enabled:      true,
+			UDP:          true,
+			RouteMode:    "transit",
+			TransitRoute: "missing-route",
+		}},
+	}
+
+	if err := ValidateConfig(config); err == nil || !strings.Contains(err.Error(), "绑定的中转线路 missing-route 不存在") {
+		t.Fatalf("expected missing transit route error, got %v", err)
+	}
+}

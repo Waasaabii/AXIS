@@ -40,6 +40,7 @@ func createEmptyState() *AppState {
 		Providers:       map[string]ProviderRecord{},
 		GroupSelections: map[string]string{},
 		Groups:          map[string]GroupState{},
+		TransitRoutes:   map[string]TransitRouteState{},
 		Events:          []EventEntry{},
 	}
 }
@@ -84,6 +85,18 @@ func (s *Service) loadState() error {
 	}
 	if state != nil {
 		s.state = state
+		if s.state.Providers == nil {
+			s.state.Providers = map[string]ProviderRecord{}
+		}
+		if s.state.GroupSelections == nil {
+			s.state.GroupSelections = map[string]string{}
+		}
+		if s.state.Groups == nil {
+			s.state.Groups = map[string]GroupState{}
+		}
+		if s.state.TransitRoutes == nil {
+			s.state.TransitRoutes = map[string]TransitRouteState{}
+		}
 		s.state.Events, _ = s.store.ListEvents(100)
 		return nil
 	}
@@ -102,6 +115,9 @@ func (s *Service) loadState() error {
 				}
 				if s.state.Groups == nil {
 					s.state.Groups = map[string]GroupState{}
+				}
+				if s.state.TransitRoutes == nil {
+					s.state.TransitRoutes = map[string]TransitRouteState{}
 				}
 				s.state.Events, _ = s.store.ListEvents(100)
 				return nil
@@ -188,9 +204,29 @@ func (s *Service) renderRuntimeConfig() (string, error) {
 	if err := os.WriteFile(s.layout.LastGoodConfigPath, []byte(rendered), 0o644); err != nil {
 		return "", err
 	}
+	if err := s.writeManualProviderFiles(); err != nil {
+		return "", err
+	}
 	s.state.Runtime.LastRenderAt = nowISO()
 	s.pushEvent("info", "render", "最新代理核心配置已生成")
 	return rendered, nil
+}
+
+func (s *Service) writeManualProviderFiles() error {
+	for _, subscription := range s.config.Subscriptions {
+		if !subscription.Enabled || !isManualProviderType(subscription.Type) {
+			continue
+		}
+		content, err := buildManualProviderFileContent(subscription)
+		if err != nil {
+			return err
+		}
+		targetPath := filepath.Join(s.layout.ProvidersDir, providerFileName(subscription.Name))
+		if err := os.WriteFile(targetPath, content, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) Login(username, password string) (map[string]any, int) {
@@ -231,11 +267,18 @@ func isPlaceholderSubscriptionURL(value string) bool {
 	return strings.Contains(trimmed, "example.com") || strings.Contains(trimmed, "your-subscription-url")
 }
 
+func hasUsableSubscriptionSource(subscription Subscription) bool {
+	if isManualProviderType(subscription.Type) {
+		return strings.TrimSpace(subscription.Server) != "" && subscription.Port > 0
+	}
+	return !isPlaceholderSubscriptionURL(subscription.URL)
+}
+
 func BuildSetupState(config *Config) SetupState {
 	hasSubscriptions := len(config.Subscriptions) > 0
 	hasRealSubscriptions := false
 	for _, subscription := range config.Subscriptions {
-		if !isPlaceholderSubscriptionURL(subscription.URL) {
+		if hasUsableSubscriptionSource(subscription) {
 			hasRealSubscriptions = true
 			break
 		}
@@ -329,6 +372,7 @@ func (s *Service) GetStatus() map[string]any {
 	s.detectController(false)
 	providers := s.GetProviders()
 	groups := s.GetGroups()
+	transitRoutes := s.GetTransitRoutes()
 	listeners := s.GetListeners()
 	return map[string]any{
 		"app": map[string]any{
@@ -340,10 +384,11 @@ func (s *Service) GetStatus() map[string]any {
 		"runtime":    s.state.Runtime,
 		"controller": s.state.Controller,
 		"counts": map[string]int{
-			"providers": len(providers),
-			"groups":    len(groups),
-			"listeners": len(listeners),
-			"nodes":     sumProviderNodes(providers),
+			"providers":     len(providers),
+			"groups":        len(groups),
+			"transitRoutes": len(transitRoutes),
+			"listeners":     len(listeners),
+			"nodes":         sumProviderNodes(providers),
 		},
 		"warnings":     s.buildWarnings(),
 		"recentEvents": s.state.Events[:minInt(len(s.state.Events), 12)],
@@ -410,16 +455,26 @@ func (s *Service) GetProviders() []map[string]any {
 	items := make([]map[string]any, 0, len(s.config.Subscriptions))
 	for _, subscription := range s.config.Subscriptions {
 		record := s.getProviderRecord(subscription.Name)
+		sourceKind := "subscription"
+		endpoint := firstNonEmpty(record.URLMasked, subscription.URL)
+		if isManualProviderType(subscription.Type) {
+			sourceKind = "manual-node"
+			endpoint = firstNonEmpty(record.URLMasked, buildManualProviderEndpoint(subscription))
+		}
 		items = append(items, map[string]any{
-			"name":        subscription.Name,
-			"type":        firstNonEmpty(subscription.Type, "mihomo-http"),
-			"urlMasked":   firstNonEmpty(record.URLMasked, subscription.URL),
-			"interval":    max(subscription.Interval, 3600),
-			"enabled":     subscription.Enabled,
-			"refreshedAt": record.RefreshedAt,
-			"nodeCount":   record.NodeCount,
-			"lastError":   record.LastError,
-			"nodes":       record.Nodes,
+			"name":           subscription.Name,
+			"type":           firstNonEmpty(subscription.Type, "mihomo-http"),
+			"urlMasked":      endpoint,
+			"endpoint":       endpoint,
+			"interval":       max(subscription.Interval, 3600),
+			"enabled":        subscription.Enabled,
+			"refreshedAt":    record.RefreshedAt,
+			"nodeCount":      record.NodeCount,
+			"lastError":      record.LastError,
+			"nodes":          record.Nodes,
+			"sourceKind":     sourceKind,
+			"manual":         isManualProviderType(subscription.Type),
+			"hasCredentials": strings.TrimSpace(subscription.Username) != "" || subscription.Password != "",
 		})
 	}
 	return items
@@ -459,18 +514,154 @@ func formatRouteSummary(groupName, currentProxy, landingProxy string) string {
 	return fmt.Sprintf("%s -> %s", base, landingProxy)
 }
 
+func formatTransitRouteSummary(upstreamProxy string, targetSummary string, egressGroup string) string {
+	nextHop := firstNonEmpty(targetSummary, egressGroup)
+	if nextHop == "" {
+		nextHop = "公网"
+	}
+	if strings.TrimSpace(upstreamProxy) == "" {
+		return nextHop
+	}
+	return fmt.Sprintf("%s -> %s", upstreamProxy, nextHop)
+}
+
+func buildTransitRouteBindingError(routeView *TransitRouteView) string {
+	if routeView == nil {
+		return "中转线路不存在"
+	}
+	if routeView.Status == "disabled" {
+		return fmt.Sprintf("中转线路 %s 已停用", routeView.Name)
+	}
+	if routeView.ProviderMissing {
+		return fmt.Sprintf("中转线路 %s 的来源已删除", routeView.Name)
+	}
+	if routeView.ProviderDisabled {
+		return fmt.Sprintf("中转线路 %s 的来源已停用", routeView.Name)
+	}
+	if routeView.TransitProxyMissing {
+		return fmt.Sprintf("中转线路 %s 当前不存在中转节点 %s", routeView.Name, routeView.UpstreamProxyName)
+	}
+	if routeView.EgressGroupMissing {
+		return fmt.Sprintf("中转线路 %s 的落地出口组已删除", routeView.Name)
+	}
+	if routeView.EgressProviderMissing {
+		return fmt.Sprintf("中转线路 %s 的落地出口 provider 已删除", routeView.Name)
+	}
+	if routeView.EgressProviderDisabled {
+		return fmt.Sprintf("中转线路 %s 的落地出口 provider 已停用", routeView.Name)
+	}
+	if routeView.LandingMissing {
+		return fmt.Sprintf("中转线路 %s 绑定的落地节点已删除", routeView.Name)
+	}
+	if routeView.LandingDisabled {
+		return fmt.Sprintf("中转线路 %s 绑定的落地节点已停用", routeView.Name)
+	}
+	return fmt.Sprintf("中转线路 %s 当前不可用", routeView.Name)
+}
+
+func buildFallbackCandidates(group EgressGroup, nodes []NodeInfo) []GroupCandidate {
+	nodeMap := map[string]NodeInfo{}
+	for _, node := range nodes {
+		nodeMap[node.Name] = node
+	}
+
+	candidates := make([]GroupCandidate, 0, len(group.Proxies))
+	for _, proxyName := range normalizeProxyOrder(group.Proxies) {
+		node, ok := nodeMap[proxyName]
+		if !ok {
+			continue
+		}
+		candidateID := node.Name
+		candidateName := node.Name
+		if group.LandingProxy != "" {
+			candidateID = fmt.Sprintf("%s -> %s", node.Name, group.LandingProxy)
+			candidateName = candidateID
+		}
+		candidates = append(candidates, GroupCandidate{
+			ID:       candidateID,
+			Name:     candidateName,
+			Type:     node.Type,
+			Server:   node.Server,
+			Port:     node.Port,
+			NodeName: node.Name,
+		})
+	}
+	return candidates
+}
+
+func (s *Service) buildTransitRouteView(route TransitRoute, groupsByName map[string]GroupView, providerNames map[string]struct{}, enabledProviders map[string]struct{}) TransitRouteView {
+	providerRecord := s.getProviderRecord(route.UpstreamProvider)
+	transitProxyKnown := len(providerRecord.Nodes) > 0
+	transitProxyMissing := false
+	if transitProxyKnown {
+		transitProxyMissing = true
+		for _, node := range providerRecord.Nodes {
+			if node.Name == route.UpstreamProxyName {
+				transitProxyMissing = false
+				break
+			}
+		}
+	}
+
+	targetGroup, egressGroupExists := groupsByName[route.EgressGroup]
+	_, providerExists := providerNames[route.UpstreamProvider]
+	_, providerEnabled := enabledProviders[route.UpstreamProvider]
+	routeState := s.state.TransitRoutes[route.Name]
+
+	status := "configured"
+	if !route.Enabled {
+		status = "disabled"
+	} else if !providerExists || !egressGroupExists {
+		status = "orphaned"
+	} else if !providerEnabled || transitProxyMissing || targetGroup.ProviderMissing || targetGroup.ProviderDisabled || targetGroup.LandingMissing || targetGroup.LandingDisabled {
+		status = "degraded"
+	}
+
+	return TransitRouteView{
+		Name:                   route.Name,
+		Enabled:                route.Enabled,
+		UpstreamProvider:       route.UpstreamProvider,
+		UpstreamProxyName:      route.UpstreamProxyName,
+		EgressGroup:            route.EgressGroup,
+		Notes:                  route.Notes,
+		CurrentProxy:           targetGroup.Current,
+		CandidateCount:         targetGroup.CandidateCount,
+		EgressGroupMode:        targetGroup.Mode,
+		RuntimeGroupName:       buildTransitMirrorGroupName(route.Name),
+		RouteSummary:           formatTransitRouteSummary(route.UpstreamProxyName, targetGroup.RouteSummary, route.EgressGroup),
+		LastTestedAt:           routeState.LastTestedAt,
+		LastTestStatus:         routeState.LastTestStatus,
+		LastTestMessage:        routeState.LastTestMessage,
+		LastTestDelay:          routeState.LastTestDelay,
+		LastTestURL:            routeState.LastTestURL,
+		Status:                 status,
+		ProviderMissing:        !providerExists,
+		ProviderDisabled:       providerExists && !providerEnabled,
+		TransitProxyMissing:    transitProxyMissing,
+		EgressGroupMissing:     !egressGroupExists,
+		EgressProviderMissing:  targetGroup.ProviderMissing,
+		EgressProviderDisabled: targetGroup.ProviderDisabled,
+		LandingMissing:         targetGroup.LandingMissing,
+		LandingDisabled:        targetGroup.LandingDisabled,
+	}
+}
+
 func (s *Service) buildGroupView(group EgressGroup) GroupView {
 	providerRecord := s.getProviderRecord(group.Provider)
 	candidates := []GroupCandidate{}
-	for _, node := range providerRecord.Nodes {
-		if matchesGroup(group, node) {
-			candidateID := node.Name
-			candidateName := node.Name
-			if group.LandingProxy != "" {
-				candidateID = fmt.Sprintf("%s -> %s", node.Name, group.LandingProxy)
-				candidateName = candidateID
+	if group.Mode == "fallback" {
+		candidates = buildFallbackCandidates(group, providerRecord.Nodes)
+	} else {
+		for _, node := range providerRecord.Nodes {
+			if matchesGroup(group, node) {
+				candidateID := node.Name
+				candidateName := node.Name
+				if group.LandingProxy != "" {
+					candidateID = fmt.Sprintf("%s -> %s", node.Name, group.LandingProxy)
+					candidateName = candidateID
+				}
+				candidates = append(candidates, GroupCandidate{ID: candidateID, Name: candidateName, Type: node.Type, Server: node.Server, Port: node.Port, NodeName: node.Name})
 			}
-			candidates = append(candidates, GroupCandidate{ID: candidateID, Name: candidateName, Type: node.Type, Server: node.Server, Port: node.Port, NodeName: node.Name})
 		}
 	}
 	currentValue := s.state.GroupSelections[group.Name]
@@ -491,17 +682,21 @@ func (s *Service) buildGroupView(group EgressGroup) GroupView {
 	}
 	groupState := s.state.Groups[group.Name]
 	return GroupView{
-		Name:              group.Name,
-		Mode:              firstNonEmpty(group.Mode, "manual"),
-		Provider:          group.Provider,
-		Filter:            group.Filter,
-		CandidateCount:    len(candidates),
-		Current:           currentLabel,
-		CurrentValue:      currentValue,
-		Candidates:        candidates,
-		LastHealthcheckAt: groupState.LastHealthcheckAt,
-		LandingProxy:      group.LandingProxy,
-		RouteSummary:      formatRouteSummary(group.Name, currentLabel, group.LandingProxy),
+		Name:                group.Name,
+		Mode:                firstNonEmpty(group.Mode, "manual"),
+		Provider:            group.Provider,
+		Filter:              group.Filter,
+		ExcludeFilter:       group.ExcludeFilter,
+		CandidateCount:      len(candidates),
+		Current:             currentLabel,
+		CurrentValue:        currentValue,
+		Candidates:          candidates,
+		ProxyOrder:          normalizeProxyOrder(group.Proxies),
+		LastHealthcheckAt:   groupState.LastHealthcheckAt,
+		LandingProxy:        group.LandingProxy,
+		HealthCheckURL:      group.HealthCheckURL,
+		HealthCheckInterval: group.Interval,
+		RouteSummary:        formatRouteSummary(group.Name, currentLabel, group.LandingProxy),
 	}
 }
 
@@ -539,47 +734,143 @@ func (s *Service) GetGroups() []GroupView {
 	return views
 }
 
+func (s *Service) GetTransitRoutes() []TransitRouteView {
+	groupsByName := map[string]GroupView{}
+	for _, group := range s.GetGroups() {
+		groupsByName[group.Name] = group
+	}
+
+	providerNames := map[string]struct{}{}
+	enabledProviders := map[string]struct{}{}
+	for _, subscription := range s.config.Subscriptions {
+		providerNames[subscription.Name] = struct{}{}
+		if subscription.Enabled {
+			enabledProviders[subscription.Name] = struct{}{}
+		}
+	}
+
+	views := make([]TransitRouteView, 0, len(s.config.TransitRoutes))
+	for _, route := range s.config.TransitRoutes {
+		views = append(views, s.buildTransitRouteView(route, groupsByName, providerNames, enabledProviders))
+	}
+	return views
+}
+
+func (s *Service) getTransitRouteViewByName(name string) *TransitRouteView {
+	for _, route := range s.GetTransitRoutes() {
+		if route.Name == name {
+			routeCopy := route
+			return &routeCopy
+		}
+	}
+	return nil
+}
+
 func (s *Service) GetListeners() []ListenerView {
 	groupMap := map[string]GroupView{}
 	for _, group := range s.GetGroups() {
 		groupMap[group.Name] = group
 	}
+	transitRouteMap := map[string]TransitRouteView{}
+	for _, route := range s.GetTransitRoutes() {
+		transitRouteMap[route.Name] = route
+	}
 	groupNames := map[string]struct{}{}
 	for _, group := range s.config.EgressGroups {
 		groupNames[group.Name] = struct{}{}
 	}
+	transitRouteNames := map[string]struct{}{}
+	for _, route := range s.config.TransitRoutes {
+		transitRouteNames[route.Name] = struct{}{}
+	}
 
 	listeners := make([]ListenerView, 0, len(s.config.Listeners))
 	for _, listener := range s.config.Listeners {
-		group, ok := groupMap[listener.EgressGroup]
-		groupMissing := false
-		if _, exists := groupNames[listener.EgressGroup]; !exists {
-			groupMissing = true
-		}
+		routeMode := getListenerRouteMode(listener)
+		group, groupOK := groupMap[listener.EgressGroup]
+		_, groupExists := groupNames[listener.EgressGroup]
+		transitRoute, transitOK := transitRouteMap[listener.TransitRoute]
+		_, transitExists := transitRouteNames[listener.TransitRoute]
+
 		status := "configured"
-		if groupMissing {
-			status = "orphaned"
-		} else if group.ProviderMissing || group.ProviderDisabled || group.LandingMissing || group.LandingDisabled {
-			status = "degraded"
+		groupMissing := false
+		providerMissing := false
+		providerDisabled := false
+		landingMissing := false
+		landingDisabled := false
+		transitMissing := false
+		transitDisabled := false
+		transitProxyMissing := false
+		currentProxy := ""
+		routeSummary := ""
+		egressGroup := listener.EgressGroup
+		targetName := listener.EgressGroup
+
+		if routeMode == "transit" {
+			transitMissing = !transitExists
+			transitDisabled = transitOK && transitRoute.Status == "disabled"
+			transitProxyMissing = transitRoute.TransitProxyMissing
+			providerMissing = transitRoute.EgressProviderMissing
+			providerDisabled = transitRoute.EgressProviderDisabled
+			landingMissing = transitRoute.LandingMissing
+			landingDisabled = transitRoute.LandingDisabled
+			currentProxy = transitRoute.CurrentProxy
+			routeSummary = transitRoute.RouteSummary
+			egressGroup = transitRoute.EgressGroup
+			targetName = firstNonEmpty(transitRoute.Name, listener.TransitRoute)
+
+			switch {
+			case transitMissing:
+				status = "orphaned"
+			case transitDisabled:
+				status = "disabled"
+			case transitOK:
+				status = transitRoute.Status
+			default:
+				status = "degraded"
+			}
+		} else {
+			groupMissing = !groupExists
+			providerMissing = group.ProviderMissing
+			providerDisabled = group.ProviderDisabled
+			landingMissing = group.LandingMissing
+			landingDisabled = group.LandingDisabled
+			if groupOK {
+				currentProxy = group.Current
+				routeSummary = group.RouteSummary
+			}
+
+			if groupMissing {
+				status = "orphaned"
+			} else if providerMissing || providerDisabled || landingMissing || landingDisabled {
+				status = "degraded"
+			}
 		}
 
 		listeners = append(listeners, ListenerView{
-			Name:             listener.Name,
-			Type:             firstNonEmpty(listener.Type, "socks"),
-			Listen:           firstNonEmpty(listener.Listen, "0.0.0.0"),
-			Port:             listener.Port,
-			UDP:              listener.UDP,
-			Users:            listener.Users,
-			UserCount:        len(listener.Users),
-			EgressGroup:      listener.EgressGroup,
-			CurrentProxy:     ternaryString(ok, group.Current, ""),
-			RouteSummary:     ternaryString(ok, group.RouteSummary, listener.EgressGroup),
-			Status:           status,
-			GroupMissing:     groupMissing,
-			ProviderMissing:  group.ProviderMissing,
-			ProviderDisabled: group.ProviderDisabled,
-			LandingMissing:   group.LandingMissing,
-			LandingDisabled:  group.LandingDisabled,
+			Name:                listener.Name,
+			Type:                firstNonEmpty(listener.Type, "socks"),
+			Listen:              firstNonEmpty(listener.Listen, "0.0.0.0"),
+			Port:                listener.Port,
+			UDP:                 listener.UDP,
+			Enabled:             listener.Enabled,
+			Users:               listener.Users,
+			UserCount:           len(listener.Users),
+			RouteMode:           routeMode,
+			EgressGroup:         egressGroup,
+			TransitRoute:        listener.TransitRoute,
+			TargetName:          targetName,
+			CurrentProxy:        currentProxy,
+			RouteSummary:        firstNonEmpty(routeSummary, targetName),
+			Status:              status,
+			GroupMissing:        groupMissing,
+			ProviderMissing:     providerMissing,
+			ProviderDisabled:    providerDisabled,
+			LandingMissing:      landingMissing,
+			LandingDisabled:     landingDisabled,
+			TransitMissing:      transitMissing,
+			TransitDisabled:     transitDisabled,
+			TransitProxyMissing: transitProxyMissing,
 		})
 	}
 	return listeners
@@ -749,6 +1040,7 @@ func (s *Service) applyRuntimeConfig(reason string) map[string]any {
 	message := s.readControllerResultMessage(result, fmt.Sprintf("代理核心返回状态码 %d", result.Status))
 	if result.OK {
 		message = "最新配置已发送到代理核心。"
+		s.syncTransitMirrorSelections("", "")
 	}
 	s.state.Runtime.LastApplyAt = appliedAt
 	if result.OK {
@@ -788,15 +1080,21 @@ func (s *Service) RefreshProvider(providerName string) map[string]any {
 		record.LastError = fmt.Sprintf("%d %s", statusCode, statusText)
 	}
 	s.state.Providers[providerName] = *record
-	runtimeRefresh, runtimeErr := s.controller.RefreshProvider(providerName)
 	runtimePayload := map[string]any{}
-	if runtimeErr != nil {
+	if isManualProviderType(subscription.Type) {
 		runtimePayload["ok"] = false
-		runtimePayload["error"] = runtimeErr.Error()
+		runtimePayload["deferred"] = true
+		runtimePayload["message"] = "手动节点无需远程刷新代理核心订阅。"
 	} else {
-		runtimePayload["ok"] = runtimeRefresh.OK
-		runtimePayload["status"] = runtimeRefresh.Status
-		runtimePayload["payload"] = runtimeRefresh.Payload
+		runtimeRefresh, runtimeErr := s.controller.RefreshProvider(providerName)
+		if runtimeErr != nil {
+			runtimePayload["ok"] = false
+			runtimePayload["error"] = runtimeErr.Error()
+		} else {
+			runtimePayload["ok"] = runtimeRefresh.OK
+			runtimePayload["status"] = runtimeRefresh.Status
+			runtimePayload["payload"] = runtimeRefresh.Payload
+		}
 	}
 	s.pushEvent(ternaryString(ok, "info", "warn"), "provider", fmt.Sprintf("%s 刷新完成，节点数 %d", providerName, record.NodeCount))
 	_ = s.persistState()
@@ -846,6 +1144,7 @@ func (s *Service) SelectGroup(groupName, proxyName string) (map[string]any, int)
 		runtimePayload["payload"] = runtimeResult.Payload
 	}
 	s.pushEvent("info", "group", fmt.Sprintf("出口线路 %s 已切换到 %s", groupName, selectedValue))
+	s.syncTransitMirrorSelections(groupName, runtimeProxyName)
 	_ = s.persistState()
 	result := s.buildGroupView(*group)
 	return map[string]any{"ok": true, "group": result, "runtime": runtimePayload}, 200
@@ -868,6 +1167,94 @@ func (s *Service) RunHealthcheck(groupName string) (map[string]any, int) {
 	return map[string]any{"ok": true, "group": s.buildGroupView(*group)}, 200
 }
 
+func extractHealthcheckDelay(payload any) int {
+	switch value := payload.(type) {
+	case map[string]any:
+		for _, key := range []string{"delay", "meanDelay"} {
+			switch delay := value[key].(type) {
+			case float64:
+				return int(delay)
+			case int:
+				return delay
+			}
+		}
+	case []any:
+		best := 0
+		for _, item := range value {
+			delay := extractHealthcheckDelay(item)
+			if delay > 0 && (best == 0 || delay < best) {
+				best = delay
+			}
+		}
+		return best
+	}
+	return 0
+}
+
+func (s *Service) validateTransitRouteBinding(routeName string) (*TransitRouteView, string) {
+	routeView := s.getTransitRouteViewByName(routeName)
+	if routeView == nil {
+		return nil, fmt.Sprintf("中转线路 %s 不存在", routeName)
+	}
+	if routeView.Status != "configured" {
+		return routeView, buildTransitRouteBindingError(routeView)
+	}
+	return routeView, ""
+}
+
+func (s *Service) syncTransitMirrorSelections(egressGroupName, desiredProxyName string) {
+	if s.config.Runtime.RenderOnly {
+		return
+	}
+
+	for _, route := range s.config.TransitRoutes {
+		if !isTransitRouteEnabled(route) {
+			continue
+		}
+		if egressGroupName != "" && route.EgressGroup != egressGroupName {
+			continue
+		}
+
+		var targetGroup *EgressGroup
+		for index := range s.config.EgressGroups {
+			if s.config.EgressGroups[index].Name == route.EgressGroup {
+				targetGroup = &s.config.EgressGroups[index]
+				break
+			}
+		}
+		if targetGroup == nil || firstNonEmpty(targetGroup.Mode, "manual") != "manual" {
+			continue
+		}
+
+		routeView, validationError := s.validateTransitRouteBinding(route.Name)
+		if validationError != "" || routeView == nil {
+			continue
+		}
+
+		proxyName := desiredProxyName
+		if proxyName == "" {
+			targetView := s.buildGroupView(*targetGroup)
+			proxyName = targetView.Current
+		}
+		if strings.TrimSpace(proxyName) == "" {
+			continue
+		}
+
+		runtimeGroupName := routeView.RuntimeGroupName
+		if targetGroup.LandingProxy != "" {
+			runtimeGroupName = relaySourceGroupName(runtimeGroupName)
+		}
+		result, err := s.controller.SelectProxy(runtimeGroupName, proxyName)
+		if err != nil {
+			s.pushEvent("warn", "transit-sync", fmt.Sprintf("中转线路 %s 的镜像组同步失败: %s", route.Name, err.Error()))
+			continue
+		}
+		if !result.OK {
+			s.pushEvent("warn", "transit-sync", fmt.Sprintf("中转线路 %s 的镜像组同步失败: %s", route.Name, s.readControllerResultMessage(result, fmt.Sprintf("代理核心返回状态码 %d", result.Status))))
+		}
+	}
+}
+
 func decodeIntoConfig(payload map[string]any) (*Config, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -881,11 +1268,50 @@ func decodeIntoConfig(payload map[string]any) (*Config, error) {
 }
 
 func (s *Service) AddSubscription(payload map[string]any) (map[string]any, int) {
-	name, _ := payload["name"].(string)
-	urlValue, _ := payload["url"].(string)
-	if strings.TrimSpace(name) == "" || strings.TrimSpace(urlValue) == "" {
+	providerType := firstNonEmpty(stringValue(payload["type"]), "mihomo-http")
+	name := strings.TrimSpace(stringValue(payload["name"]))
+	urlValue := strings.TrimSpace(stringValue(payload["url"]))
+	server := strings.TrimSpace(stringValue(payload["server"]))
+	port := intValue(payload["port"], 0)
+	username := strings.TrimSpace(stringValue(payload["username"]))
+	password := stringValue(payload["password"])
+
+	if importText := strings.TrimSpace(stringValue(payload["import_text"])); importText != "" {
+		parsed, err := parseManualProviderInput(importText, providerType)
+		if err != nil {
+			return map[string]any{"ok": false, "error": err.Error()}, 400
+		}
+		if parsed.Type != "" {
+			providerType = parsed.Type
+		}
+		if parsed.Server != "" {
+			server = parsed.Server
+		}
+		if parsed.Port > 0 {
+			port = parsed.Port
+		}
+		if parsed.Username != "" {
+			username = parsed.Username
+		}
+		if parsed.Password != "" {
+			password = parsed.Password
+		}
+	}
+
+	if isManualProviderType(providerType) {
+		if name == "" {
+			if server == "" || port <= 0 {
+				return map[string]any{"ok": false, "error": "手动节点的名称为空，且无法根据地址和端口自动生成"}, 400
+			}
+			name = buildManualProviderName(providerType, server, port)
+		}
+		if server == "" || port <= 0 {
+			return map[string]any{"ok": false, "error": "手动节点的地址和端口不能为空"}, 400
+		}
+	} else if name == "" || urlValue == "" {
 		return map[string]any{"ok": false, "error": "订阅名称和 URL 不能为空"}, 400
 	}
+
 	for _, subscription := range s.config.Subscriptions {
 		if subscription.Name == name {
 			return map[string]any{"ok": false, "error": fmt.Sprintf("订阅 %s 已存在", name)}, 400
@@ -893,9 +1319,13 @@ func (s *Service) AddSubscription(payload map[string]any) (map[string]any, int) 
 	}
 	next := mustJSONClone(*s.config)
 	next.Subscriptions = append(next.Subscriptions, Subscription{
-		Name:                strings.TrimSpace(name),
-		Type:                firstNonEmpty(stringValue(payload["type"]), "mihomo-http"),
-		URL:                 strings.TrimSpace(urlValue),
+		Name:                name,
+		Type:                providerType,
+		URL:                 urlValue,
+		Server:              server,
+		Port:                port,
+		Username:            username,
+		Password:            password,
 		Interval:            intValue(payload["interval"], 3600),
 		Enabled:             boolValue(payload["enabled"], true),
 		HealthCheckURL:      firstNonEmpty(stringValue(payload["health_check_url"]), "https://www.gstatic.com/generate_204"),
@@ -932,7 +1362,26 @@ func boolValue(input any, fallback bool) bool {
 	return fallback
 }
 
+func stringArrayValue(input any) []string {
+	items, ok := input.([]any)
+	if !ok {
+		return nil
+	}
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		if value, ok := item.(string); ok {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
 func (s *Service) RemoveSubscription(name string) (map[string]any, int) {
+	for _, route := range s.config.TransitRoutes {
+		if route.UpstreamProvider == name {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("订阅 %s 仍被中转线路 %s 使用，请先解除绑定", name, route.Name)}, 400
+		}
+	}
 	found := false
 	next := mustJSONClone(*s.config)
 	filtered := make([]Subscription, 0, len(next.Subscriptions))
@@ -970,6 +1419,8 @@ func (s *Service) ToggleSubscription(name string, enabled bool) (map[string]any,
 func (s *Service) AddEgressGroup(payload map[string]any) (map[string]any, int) {
 	name := strings.TrimSpace(stringValue(payload["name"]))
 	provider := stringValue(payload["provider"])
+	mode := firstNonEmpty(stringValue(payload["mode"]), "manual")
+	proxies := normalizeProxyOrder(stringArrayValue(payload["proxies"]))
 	if name == "" || provider == "" {
 		return map[string]any{"ok": false, "error": "出口线路名称和订阅源不能为空"}, 400
 	}
@@ -985,9 +1436,42 @@ func (s *Service) AddEgressGroup(payload map[string]any) (map[string]any, int) {
 	if landingProxy != "" && !s.hasLandingProxy(landingProxy) {
 		return map[string]any{"ok": false, "error": fmt.Sprintf("落地节点 %s 不存在", landingProxy)}, 400
 	}
+	if mode == "fallback" && len(proxies) == 0 {
+		return map[string]any{"ok": false, "error": "顺序容灾组至少需要选择一个节点"}, 400
+	}
 	next := mustJSONClone(*s.config)
-	next.EgressGroups = append(next.EgressGroups, EgressGroup{Name: name, Provider: provider, Mode: firstNonEmpty(stringValue(payload["mode"]), "manual"), Filter: stringValue(payload["filter"]), ExcludeFilter: stringValue(payload["exclude_filter"]), LandingProxy: landingProxy})
-	return s.SaveConfig(&next)
+	filter := stringValue(payload["filter"])
+	excludeFilter := stringValue(payload["exclude_filter"])
+	healthCheckURL := ""
+	interval := intValue(payload["interval"], 0)
+	if mode == "fallback" {
+		filter = ""
+		excludeFilter = ""
+		healthCheckURL = firstNonEmpty(stringValue(payload["health_check_url"]), "https://www.gstatic.com/generate_204")
+		interval = max(interval, 60)
+	}
+	next.EgressGroups = append(next.EgressGroups, EgressGroup{
+		Name:          name,
+		Provider:      provider,
+		Mode:          mode,
+		Filter:        filter,
+		ExcludeFilter: excludeFilter,
+		Proxies: func() []string {
+			if mode == "fallback" {
+				return proxies
+			}
+			return nil
+		}(),
+		LandingProxy:   landingProxy,
+		HealthCheckURL: healthCheckURL,
+		Interval:       interval,
+	})
+	result, status := s.SaveConfig(&next)
+	if status == 200 && mode == "fallback" && len(proxies) > 0 {
+		s.state.GroupSelections[name] = proxies[0]
+		_ = s.persistState()
+	}
+	return result, status
 }
 
 func (s *Service) hasSubscription(name string) bool {
@@ -1008,6 +1492,15 @@ func (s *Service) hasLandingProxy(name string) bool {
 	return false
 }
 
+func (s *Service) hasTransitRoute(name string) bool {
+	for _, route := range s.config.TransitRoutes {
+		if route.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) UpdateEgressGroup(name string, payload map[string]any) (map[string]any, int) {
 	next := mustJSONClone(*s.config)
 	index := -1
@@ -1019,6 +1512,14 @@ func (s *Service) UpdateEgressGroup(name string, payload map[string]any) (map[st
 	}
 	if index < 0 {
 		return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", name)}, 404
+	}
+	nextMode := firstNonEmpty(stringValue(payload["mode"]), firstNonEmpty(next.EgressGroups[index].Mode, "manual"))
+	nextProxies := next.EgressGroups[index].Proxies
+	if payload["proxies"] != nil {
+		nextProxies = normalizeProxyOrder(stringArrayValue(payload["proxies"]))
+	}
+	if nextMode == "fallback" && len(nextProxies) == 0 {
+		return map[string]any{"ok": false, "error": "顺序容灾组至少需要选择一个节点"}, 400
 	}
 	if provider := stringValue(payload["provider"]); provider != "" {
 		if !s.hasSubscription(provider) {
@@ -1035,19 +1536,44 @@ func (s *Service) UpdateEgressGroup(name string, payload map[string]any) (map[st
 	if mode := stringValue(payload["mode"]); mode != "" {
 		next.EgressGroups[index].Mode = mode
 	}
-	if filter := stringValue(payload["filter"]); payload["filter"] != nil {
-		next.EgressGroups[index].Filter = filter
+	if nextMode == "fallback" {
+		next.EgressGroups[index].Filter = ""
+		next.EgressGroups[index].ExcludeFilter = ""
+		next.EgressGroups[index].Proxies = nextProxies
+		next.EgressGroups[index].HealthCheckURL = firstNonEmpty(stringValue(payload["health_check_url"]), firstNonEmpty(next.EgressGroups[index].HealthCheckURL, "https://www.gstatic.com/generate_204"))
+		next.EgressGroups[index].Interval = max(intValue(payload["interval"], next.EgressGroups[index].Interval), 60)
+	} else {
+		next.EgressGroups[index].Proxies = nil
+		if filter := stringValue(payload["filter"]); payload["filter"] != nil {
+			next.EgressGroups[index].Filter = filter
+		}
+		if excludeFilter := stringValue(payload["exclude_filter"]); payload["exclude_filter"] != nil {
+			next.EgressGroups[index].ExcludeFilter = excludeFilter
+		}
 	}
-	if excludeFilter := stringValue(payload["exclude_filter"]); payload["exclude_filter"] != nil {
-		next.EgressGroups[index].ExcludeFilter = excludeFilter
+	result, status := s.SaveConfig(&next)
+	if status == 200 {
+		if nextMode == "fallback" && len(nextProxies) > 0 {
+			if _, ok := s.state.GroupSelections[name]; !ok || !containsString(nextProxies, s.state.GroupSelections[name]) {
+				s.state.GroupSelections[name] = nextProxies[0]
+			}
+		} else {
+			delete(s.state.GroupSelections, name)
+		}
+		_ = s.persistState()
 	}
-	return s.SaveConfig(&next)
+	return result, status
 }
 
 func (s *Service) RemoveEgressGroup(name string) (map[string]any, int) {
 	for _, listener := range s.config.Listeners {
-		if listener.EgressGroup == name {
+		if getListenerRouteMode(listener) == "direct" && listener.EgressGroup == name {
 			return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 仍被本地入口使用，请先解除绑定", name)}, 400
+		}
+	}
+	for _, route := range s.config.TransitRoutes {
+		if route.EgressGroup == name {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 仍被中转线路 %s 引用，请先解除绑定", name, route.Name)}, 400
 		}
 	}
 	next := mustJSONClone(*s.config)
@@ -1064,7 +1590,13 @@ func (s *Service) RemoveEgressGroup(name string) (map[string]any, int) {
 		return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", name)}, 404
 	}
 	next.EgressGroups = filtered
-	return s.SaveConfig(&next)
+	result, status := s.SaveConfig(&next)
+	if status == 200 {
+		delete(s.state.GroupSelections, name)
+		delete(s.state.Groups, name)
+		_ = s.persistState()
+	}
+	return result, status
 }
 
 func (s *Service) AddLandingProxy(payload map[string]any) (map[string]any, int) {
@@ -1169,9 +1701,11 @@ func (s *Service) RemoveLandingProxy(name string) (map[string]any, int) {
 func (s *Service) AddListener(payload map[string]any) (map[string]any, int) {
 	name := strings.TrimSpace(stringValue(payload["name"]))
 	port := intValue(payload["port"], 0)
-	egressGroup := stringValue(payload["egress_group"])
-	if name == "" || port == 0 || egressGroup == "" {
-		return map[string]any{"ok": false, "error": "本地入口名称、端口和出口线路不能为空"}, 400
+	transitRoute := strings.TrimSpace(stringValue(payload["transit_route"]))
+	routeMode := normalizeListenerRouteMode(stringValue(payload["route_mode"]), transitRoute)
+	egressGroup := strings.TrimSpace(stringValue(payload["egress_group"]))
+	if name == "" || port == 0 {
+		return map[string]any{"ok": false, "error": "本地入口名称和端口不能为空"}, 400
 	}
 	for _, listener := range s.config.Listeners {
 		if listener.Name == name {
@@ -1181,20 +1715,34 @@ func (s *Service) AddListener(payload map[string]any) (map[string]any, int) {
 			return map[string]any{"ok": false, "error": fmt.Sprintf("端口 %d 已被占用", port)}, 400
 		}
 	}
-	if !s.hasGroup(egressGroup) {
-		return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", egressGroup)}, 400
+	if routeMode == "transit" {
+		if transitRoute == "" {
+			return map[string]any{"ok": false, "error": "中转模式下必须选择中转线路"}, 400
+		}
+		if routeView, validationError := s.validateTransitRouteBinding(transitRoute); validationError != "" {
+			return map[string]any{"ok": false, "error": validationError, "route": routeView}, 400
+		}
+	} else {
+		if egressGroup == "" {
+			return map[string]any{"ok": false, "error": "直连模式下必须选择出口线路"}, 400
+		}
+		if !s.hasGroup(egressGroup) {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", egressGroup)}, 400
+		}
 	}
 
 	next := mustJSONClone(*s.config)
 	next.Listeners = append(next.Listeners, Listener{
-		Name:        name,
-		Type:        firstNonEmpty(stringValue(payload["type"]), "socks"),
-		Listen:      firstNonEmpty(stringValue(payload["listen"]), "0.0.0.0"),
-		Port:        port,
-		UDP:         boolValue(payload["udp"], true),
-		Enabled:     boolValue(payload["enabled"], true),
-		Users:       parseUsers(payload["users"]),
-		EgressGroup: egressGroup,
+		Name:         name,
+		Type:         firstNonEmpty(stringValue(payload["type"]), "socks"),
+		Listen:       firstNonEmpty(stringValue(payload["listen"]), "0.0.0.0"),
+		Port:         port,
+		UDP:          boolValue(payload["udp"], true),
+		Enabled:      boolValue(payload["enabled"], true),
+		Users:        parseUsers(payload["users"]),
+		RouteMode:    routeMode,
+		EgressGroup:  ternaryString(routeMode == "direct", egressGroup, ""),
+		TransitRoute: ternaryString(routeMode == "transit", transitRoute, ""),
 	})
 	return s.SaveConfig(&next)
 }
@@ -1245,11 +1793,36 @@ func (s *Service) UpdateListener(name string, payload map[string]any) (map[strin
 		}
 		next.Listeners[index].Port = port
 	}
-	if egressGroup := stringValue(payload["egress_group"]); egressGroup != "" {
-		if !s.hasGroup(egressGroup) {
-			return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", egressGroup)}, 400
+	current := next.Listeners[index]
+	nextRouteMode := normalizeListenerRouteMode(stringValue(payload["route_mode"]), firstNonEmpty(stringValue(payload["transit_route"]), current.TransitRoute))
+	nextEgressGroup := current.EgressGroup
+	if payload["egress_group"] != nil {
+		nextEgressGroup = strings.TrimSpace(stringValue(payload["egress_group"]))
+	}
+	nextTransitRoute := current.TransitRoute
+	if payload["transit_route"] != nil {
+		nextTransitRoute = strings.TrimSpace(stringValue(payload["transit_route"]))
+	}
+	if nextRouteMode == "transit" {
+		if nextTransitRoute == "" {
+			return map[string]any{"ok": false, "error": "中转模式下必须选择中转线路"}, 400
 		}
-		next.Listeners[index].EgressGroup = egressGroup
+		if routeView, validationError := s.validateTransitRouteBinding(nextTransitRoute); validationError != "" {
+			return map[string]any{"ok": false, "error": validationError, "route": routeView}, 400
+		}
+		next.Listeners[index].RouteMode = "transit"
+		next.Listeners[index].TransitRoute = nextTransitRoute
+		next.Listeners[index].EgressGroup = ""
+	} else {
+		if nextEgressGroup == "" {
+			return map[string]any{"ok": false, "error": "直连模式下必须选择出口线路"}, 400
+		}
+		if !s.hasGroup(nextEgressGroup) {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("出口线路 %s 不存在", nextEgressGroup)}, 400
+		}
+		next.Listeners[index].RouteMode = "direct"
+		next.Listeners[index].EgressGroup = nextEgressGroup
+		next.Listeners[index].TransitRoute = ""
 	}
 	if listenerType := stringValue(payload["type"]); listenerType != "" {
 		next.Listeners[index].Type = listenerType
@@ -1259,6 +1832,9 @@ func (s *Service) UpdateListener(name string, payload map[string]any) (map[strin
 	}
 	if payload["udp"] != nil {
 		next.Listeners[index].UDP = boolValue(payload["udp"], true)
+	}
+	if payload["enabled"] != nil {
+		next.Listeners[index].Enabled = boolValue(payload["enabled"], true)
 	}
 	if payload["users"] != nil {
 		next.Listeners[index].Users = parseUsers(payload["users"])
@@ -1282,6 +1858,204 @@ func (s *Service) RemoveListener(name string) (map[string]any, int) {
 	}
 	next.Listeners = filtered
 	return s.SaveConfig(&next)
+}
+
+func (s *Service) AddTransitRoute(payload map[string]any) (map[string]any, int) {
+	name := strings.TrimSpace(stringValue(payload["name"]))
+	upstreamProvider := strings.TrimSpace(stringValue(payload["upstream_provider"]))
+	upstreamProxyName := strings.TrimSpace(stringValue(payload["upstream_proxy_name"]))
+	egressGroup := strings.TrimSpace(stringValue(payload["egress_group"]))
+	if name == "" || upstreamProvider == "" || upstreamProxyName == "" || egressGroup == "" {
+		return map[string]any{"ok": false, "error": "中转线路名称、中转来源、中转节点和落地出口组不能为空"}, 400
+	}
+	if s.hasTransitRoute(name) {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("中转线路 %s 已存在", name)}, 400
+	}
+	if !s.hasSubscription(upstreamProvider) {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("中转来源 %s 不存在", upstreamProvider)}, 400
+	}
+	if !s.hasGroup(egressGroup) {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("落地出口组 %s 不存在", egressGroup)}, 400
+	}
+	providerRecord := s.getProviderRecord(upstreamProvider)
+	if len(providerRecord.Nodes) > 0 {
+		found := false
+		for _, node := range providerRecord.Nodes {
+			if node.Name == upstreamProxyName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("来源 %s 当前不存在节点 %s", upstreamProvider, upstreamProxyName)}, 400
+		}
+	}
+
+	next := mustJSONClone(*s.config)
+	next.TransitRoutes = append(next.TransitRoutes, TransitRoute{
+		Name:              name,
+		Enabled:           boolValue(payload["enabled"], true),
+		UpstreamProvider:  upstreamProvider,
+		UpstreamProxyName: upstreamProxyName,
+		EgressGroup:       egressGroup,
+		Notes:             strings.TrimSpace(stringValue(payload["notes"])),
+	})
+	return s.SaveConfig(&next)
+}
+
+func (s *Service) UpdateTransitRoute(name string, payload map[string]any) (map[string]any, int) {
+	next := mustJSONClone(*s.config)
+	index := -1
+	for i := range next.TransitRoutes {
+		if next.TransitRoutes[i].Name == name {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("中转线路 %s 不存在", name)}, 404
+	}
+
+	current := next.TransitRoutes[index]
+	upstreamProvider := current.UpstreamProvider
+	if payload["upstream_provider"] != nil {
+		upstreamProvider = strings.TrimSpace(stringValue(payload["upstream_provider"]))
+	}
+	upstreamProxyName := current.UpstreamProxyName
+	if payload["upstream_proxy_name"] != nil {
+		upstreamProxyName = strings.TrimSpace(stringValue(payload["upstream_proxy_name"]))
+	}
+	egressGroup := current.EgressGroup
+	if payload["egress_group"] != nil {
+		egressGroup = strings.TrimSpace(stringValue(payload["egress_group"]))
+	}
+	if upstreamProvider == "" || upstreamProxyName == "" || egressGroup == "" {
+		return map[string]any{"ok": false, "error": "中转来源、中转节点和落地出口组不能为空"}, 400
+	}
+	if !s.hasSubscription(upstreamProvider) {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("中转来源 %s 不存在", upstreamProvider)}, 400
+	}
+	if !s.hasGroup(egressGroup) {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("落地出口组 %s 不存在", egressGroup)}, 400
+	}
+	providerRecord := s.getProviderRecord(upstreamProvider)
+	if len(providerRecord.Nodes) > 0 {
+		found := false
+		for _, node := range providerRecord.Nodes {
+			if node.Name == upstreamProxyName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("来源 %s 当前不存在节点 %s", upstreamProvider, upstreamProxyName)}, 400
+		}
+	}
+
+	next.TransitRoutes[index].Enabled = boolValue(payload["enabled"], current.Enabled)
+	next.TransitRoutes[index].UpstreamProvider = upstreamProvider
+	next.TransitRoutes[index].UpstreamProxyName = upstreamProxyName
+	next.TransitRoutes[index].EgressGroup = egressGroup
+	if payload["notes"] != nil {
+		next.TransitRoutes[index].Notes = strings.TrimSpace(stringValue(payload["notes"]))
+	}
+
+	result, status := s.SaveConfig(&next)
+	if status == 200 {
+		delete(s.state.TransitRoutes, name)
+		_ = s.persistState()
+	}
+	return result, status
+}
+
+func (s *Service) RemoveTransitRoute(name string) (map[string]any, int) {
+	if !s.hasTransitRoute(name) {
+		return map[string]any{"ok": false, "error": fmt.Sprintf("中转线路 %s 不存在", name)}, 404
+	}
+	for _, listener := range s.config.Listeners {
+		if getListenerRouteMode(listener) == "transit" && listener.TransitRoute == name {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("中转线路 %s 仍被本地入口使用，请先解除绑定", name)}, 400
+		}
+	}
+
+	next := mustJSONClone(*s.config)
+	filtered := make([]TransitRoute, 0, len(next.TransitRoutes))
+	for _, route := range next.TransitRoutes {
+		if route.Name == name {
+			continue
+		}
+		filtered = append(filtered, route)
+	}
+	next.TransitRoutes = filtered
+	result, status := s.SaveConfig(&next)
+	if status == 200 {
+		delete(s.state.TransitRoutes, name)
+		_ = s.persistState()
+	}
+	return result, status
+}
+
+func (s *Service) RunTransitRouteHealthcheck(name string) (map[string]any, int) {
+	routeView, validationError := s.validateTransitRouteBinding(name)
+	if validationError != "" {
+		return map[string]any{"ok": false, "error": validationError, "route": routeView}, 400
+	}
+
+	healthCheckURL := "https://www.gstatic.com/generate_204"
+	for _, group := range s.config.EgressGroups {
+		if group.Name == routeView.EgressGroup && group.HealthCheckURL != "" {
+			healthCheckURL = group.HealthCheckURL
+			break
+		}
+	}
+
+	startedAt := nowISO()
+	s.state.TransitRoutes[name] = TransitRouteState{
+		LastTestedAt:    startedAt,
+		LastTestStatus:  "running",
+		LastTestMessage: "检测中",
+		LastTestURL:     healthCheckURL,
+	}
+	_ = s.persistState()
+
+	result, err := s.controller.HealthcheckGroup(routeView.RuntimeGroupName, healthCheckURL, 5000)
+	runtimePayload := map[string]any{}
+	ok := false
+	message := ""
+	delay := 0
+	statusCode := 0
+	if err != nil {
+		message = err.Error()
+		runtimePayload["ok"] = false
+		runtimePayload["error"] = message
+	} else {
+		ok = result.OK
+		statusCode = result.Status
+		message = s.readControllerResultMessage(result, "中转线路检测失败")
+		if ok {
+			message = "中转线路检测完成"
+			delay = extractHealthcheckDelay(result.Payload)
+		}
+		runtimePayload["ok"] = result.OK
+		runtimePayload["status"] = result.Status
+		runtimePayload["payload"] = result.Payload
+	}
+
+	s.state.TransitRoutes[name] = TransitRouteState{
+		LastTestedAt:    nowISO(),
+		LastTestStatus:  ternaryString(ok, "success", "failed"),
+		LastTestMessage: message,
+		LastTestDelay:   delay,
+		LastTestURL:     healthCheckURL,
+	}
+	s.pushEvent(ternaryString(ok, "info", "warn"), "transit-healthcheck", fmt.Sprintf("已执行中转线路检测：%s (%s)", name, firstNonEmpty(message, fmt.Sprintf("状态码 %d", statusCode))))
+	_ = s.persistState()
+
+	refreshedRoute := s.getTransitRouteViewByName(name)
+	if !ok {
+		return map[string]any{"ok": false, "error": message, "route": refreshedRoute, "runtime": runtimePayload}, 400
+	}
+	return map[string]any{"ok": true, "route": refreshedRoute, "runtime": runtimePayload}, 200
 }
 
 func (s *Service) MihomoVersions() (MihomoVersionsResponse, error) {

@@ -98,3 +98,94 @@ func TestRenderMihomoConfigWithLandingProxy(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderMihomoConfigWithManualProvider(t *testing.T) {
+	output, err := RenderMihomoConfig(&Config{
+		Runtime: RuntimeConfig{ExternalController: "http://127.0.0.1:11235", ExternalSecret: "secret"},
+		Subscriptions: []Subscription{
+			{Name: "tokyo-fixed", Type: "socks5", Server: "proxy.example.com", Port: 9001, Enabled: true},
+		},
+		EgressGroups: []EgressGroup{
+			{Name: "egress-fixed", Provider: "tokyo-fixed", Mode: "manual"},
+		},
+		Listeners: []Listener{
+			{Name: "fixed-socks", Type: "socks", Listen: "0.0.0.0", Port: 10801, UDP: true, Enabled: true, EgressGroup: "egress-fixed"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RenderMihomoConfig() error = %v", err)
+	}
+	for _, expected := range []string{
+		"proxy-providers:",
+		"type: file",
+		"path: providers/tokyo-fixed.yaml",
+		"name: egress-fixed",
+		"proxy: egress-fixed",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("rendered config missing %q:\n%s", expected, output)
+		}
+	}
+}
+
+func TestRenderMihomoConfigWithFallbackGroup(t *testing.T) {
+	output, err := RenderMihomoConfig(&Config{
+		Runtime: RuntimeConfig{ExternalController: "http://127.0.0.1:11235", ExternalSecret: "secret"},
+		Subscriptions: []Subscription{
+			{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true},
+		},
+		EgressGroups: []EgressGroup{
+			{Name: "egress-hk-fallback", Provider: "airport-main", Mode: "fallback", Proxies: []string{"HK 01", "HK 02"}, Interval: 60},
+		},
+		Listeners: []Listener{
+			{Name: "hk-socks", Type: "socks", Listen: "0.0.0.0", Port: 10801, UDP: true, Enabled: true, EgressGroup: "egress-hk-fallback"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RenderMihomoConfig() error = %v", err)
+	}
+	for _, expected := range []string{
+		"type: fallback",
+		"__axis_fb_",
+		"filter: ^HK 01$",
+		"filter: ^HK 02$",
+		"proxy: egress-hk-fallback",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("rendered fallback config missing %q:\n%s", expected, output)
+		}
+	}
+}
+
+func TestRenderMihomoConfigWithTransitRoute(t *testing.T) {
+	output, err := RenderMihomoConfig(&Config{
+		Runtime: RuntimeConfig{ExternalController: "http://127.0.0.1:11235", ExternalSecret: "secret"},
+		Subscriptions: []Subscription{
+			{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true, HealthCheckURL: "https://www.gstatic.com/generate_204", HealthCheckInterval: 300},
+		},
+		EgressGroups: []EgressGroup{
+			{Name: "egress-hk-manual", Provider: "airport-main", Mode: "manual", Filter: "(?i)港"},
+		},
+		TransitRoutes: []TransitRoute{
+			{Name: "hk-transit", Enabled: true, UpstreamProvider: "airport-main", UpstreamProxyName: "HK 01", EgressGroup: "egress-hk-manual"},
+		},
+		Listeners: []Listener{
+			{Name: "transit-socks", Type: "socks", Listen: "0.0.0.0", Port: 10801, UDP: true, Enabled: true, RouteMode: "transit", TransitRoute: "hk-transit"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RenderMihomoConfig() error = %v", err)
+	}
+	for _, expected := range []string{
+		"__axis_tr_up_",
+		"__axis_tr_pvd_",
+		"__axis_tr_grp_",
+		"dialer-proxy",
+		"filter: ^HK 01$",
+		"proxy: __axis_tr_grp_",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("rendered transit config missing %q:\n%s", expected, output)
+		}
+	}
+}

@@ -637,6 +637,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 动态代理服务健康状态 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 动态代理健康信息 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DynamicProxyHealthResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/landing-proxies": {
         parameters: {
             query?: never;
@@ -1565,6 +1601,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/proxy/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取下一个可用代理 */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 期望协议：http 或 socks5 */
+                    protocol?: string;
+                    /** @description 地区筛选 */
+                    region?: string;
+                    /** @description 城市筛选 */
+                    city?: string;
+                    /** @description 标签筛选 */
+                    tag?: string;
+                    /** @description 粘性会话标识 */
+                    session?: string;
+                    /** @description 返回格式：text 或 json */
+                    format?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description JSON 模式下的代理结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DynamicProxyNextResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DynamicProxyErrorResponse"];
+                    };
+                };
+                /** @description 当前筛选条件无可用代理 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DynamicProxyErrorResponse"];
+                    };
+                };
+                /** @description 请求过于频繁 */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DynamicProxyErrorResponse"];
+                    };
+                };
+                /** @description 当前无可用代理 */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DynamicProxyErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reload": {
         parameters: {
             query?: never;
@@ -2185,6 +2306,331 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transit-routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 中转线路列表 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 中转线路视图 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TransitRouteView"][];
+                    };
+                };
+                /** @description 未登录 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** 创建中转线路 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AddTransitRouteRequest"];
+                };
+            };
+            responses: {
+                /** @description 保存结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SaveConfigResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录或会话已过期 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 目标不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 服务端错误 */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transit-routes/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除中转线路 */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 中转线路名称 */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 保存结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SaveConfigResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录或会话已过期 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 目标不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 服务端错误 */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transit-routes/{name}/healthcheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 执行中转线路健康检查 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 中转线路名称 */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 健康检查结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TransitRouteMutationResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 中转线路不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transit-routes/{name}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新中转线路 */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 中转线路名称 */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateTransitRouteRequest"];
+                };
+            };
+            responses: {
+                /** @description 保存结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SaveConfigResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录或会话已过期 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 目标不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 服务端错误 */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2192,10 +2638,12 @@ export interface components {
         AddEgressGroupRequest: {
             exclude_filter?: string;
             filter?: string;
+            interval?: number;
             landing_proxy?: string;
             mode?: string;
             name: string;
             provider: string;
+            proxies?: string[];
         };
         AddLandingProxyRequest: {
             enabled?: boolean;
@@ -2210,11 +2658,13 @@ export interface components {
             username?: string;
         };
         AddListenerRequest: {
-            egress_group: string;
+            egress_group?: string;
             enabled?: boolean;
             listen?: string;
             name: string;
             port: number;
+            route_mode?: string;
+            transit_route?: string;
             type?: string;
             udp?: boolean;
             users?: components["schemas"]["ListenerUser"][];
@@ -2223,10 +2673,23 @@ export interface components {
             enabled?: boolean;
             health_check_interval?: number;
             health_check_url?: string;
+            import_text?: string;
             interval?: number;
-            name: string;
+            name?: string;
+            password?: string;
+            port?: number;
+            server?: string;
             type?: string;
-            url: string;
+            url?: string;
+            username?: string;
+        };
+        AddTransitRouteRequest: {
+            egress_group: string;
+            enabled?: boolean;
+            name: string;
+            notes?: string;
+            upstream_provider: string;
+            upstream_proxy_name: string;
         };
         AdminConfig: {
             password: string;
@@ -2244,6 +2707,7 @@ export interface components {
             runtime: components["schemas"]["RuntimeConfig"];
             server: components["schemas"]["ServerConfig"];
             subscriptions: components["schemas"]["Subscription"][];
+            transit_routes?: components["schemas"]["TransitRoute"][];
         };
         ConfigEnvelope: {
             config: components["schemas"]["Config"];
@@ -2266,6 +2730,41 @@ export interface components {
             secretConfigured: boolean;
             version?: string;
         };
+        DynamicProxyErrorResponse: {
+            code: number;
+            message: string;
+            request_id: string;
+        };
+        DynamicProxyHealthResponse: {
+            auth_required: boolean;
+            pool: components["schemas"]["DynamicProxyPool"];
+            request_host: string;
+            service: string;
+            status: string;
+            time: string;
+            version: string;
+        };
+        DynamicProxyNextResponse: {
+            code: number;
+            data: {
+                city?: string;
+                current_proxy?: string;
+                egress_group: string;
+                listener: string;
+                protocol: string;
+                provider: string;
+                proxy: string;
+                region?: string;
+                session_id?: string;
+            };
+            message: string;
+        };
+        DynamicProxyPool: {
+            available: number;
+            cooling: number;
+            disabled: number;
+            total: number;
+        };
         EgressGroup: {
             exclude_filter: string;
             fallback?: string;
@@ -2276,6 +2775,7 @@ export interface components {
             mode: string;
             name: string;
             provider: string;
+            proxies?: string[];
             strategy?: string;
         };
         ErrorResponse: {
@@ -2308,7 +2808,10 @@ export interface components {
             candidates: components["schemas"]["GroupCandidate"][];
             current?: string;
             currentValue?: string;
+            excludeFilter?: string;
             filter: string;
+            healthCheckInterval?: number;
+            healthCheckURL?: string;
             landingDisabled: boolean;
             landingMissing: boolean;
             landingProxy?: string;
@@ -2318,6 +2821,7 @@ export interface components {
             provider: string;
             providerDisabled: boolean;
             providerMissing: boolean;
+            proxyOrder?: string[];
             routeSummary?: string;
         };
         LandingProxy: {
@@ -2347,11 +2851,13 @@ export interface components {
             username?: string;
         };
         Listener: {
-            egress_group: string;
+            egress_group?: string;
             enabled: boolean;
             listen: string;
             name: string;
             port: number;
+            route_mode?: string;
+            transit_route?: string;
             type: string;
             udp: boolean;
             users: components["schemas"]["ListenerUser"][];
@@ -2363,6 +2869,7 @@ export interface components {
         ListenerView: {
             currentProxy?: string;
             egressGroup: string;
+            enabled: boolean;
             groupMissing: boolean;
             landingDisabled: boolean;
             landingMissing: boolean;
@@ -2371,8 +2878,14 @@ export interface components {
             port: number;
             providerDisabled: boolean;
             providerMissing: boolean;
+            routeMode: string;
             routeSummary?: string;
             status: string;
+            targetName?: string;
+            transitDisabled: boolean;
+            transitMissing: boolean;
+            transitProxyMissing: boolean;
+            transitRoute?: string;
             type: string;
             udp: boolean;
             userCount: number;
@@ -2442,12 +2955,16 @@ export interface components {
         };
         ProviderListItem: {
             enabled: boolean;
+            endpoint: string;
+            hasCredentials: boolean;
             interval: number;
             lastError?: string;
+            manual: boolean;
             name: string;
             nodeCount: number;
             nodes: components["schemas"]["NodeInfo"][];
             refreshedAt?: string;
+            sourceKind: string;
             type: string;
             urlMasked: string;
         };
@@ -2599,6 +3116,7 @@ export interface components {
             listeners: number;
             nodes: number;
             providers: number;
+            transitRoutes?: number;
         };
         StatusResponse: {
             app: components["schemas"]["StatusApp"];
@@ -2617,19 +3135,66 @@ export interface components {
             health_check_url?: string;
             interval: number;
             name: string;
+            password?: string;
+            port?: number;
+            server?: string;
             type: string;
-            url: string;
+            url?: string;
+            username?: string;
             via?: string;
         };
         ToggleSubscriptionRequest: {
             enabled: boolean;
         };
+        TransitRoute: {
+            egress_group: string;
+            enabled: boolean;
+            name: string;
+            notes?: string;
+            upstream_provider: string;
+            upstream_proxy_name: string;
+        };
+        TransitRouteMutationResponse: {
+            error?: string;
+            ok: boolean;
+            route?: components["schemas"]["TransitRouteView"];
+            runtime?: components["schemas"]["RuntimeCommandResult"];
+        };
+        TransitRouteView: {
+            candidateCount: number;
+            currentProxy?: string;
+            egressGroup: string;
+            egressGroupMissing: boolean;
+            egressGroupMode?: string;
+            egressProviderDisabled: boolean;
+            egressProviderMissing: boolean;
+            enabled: boolean;
+            landingDisabled: boolean;
+            landingMissing: boolean;
+            lastTestDelay?: number;
+            lastTestMessage?: string;
+            lastTestStatus?: string;
+            lastTestUrl?: string;
+            lastTestedAt?: string;
+            name: string;
+            notes?: string;
+            providerDisabled: boolean;
+            providerMissing: boolean;
+            routeSummary?: string;
+            runtimeGroupName?: string;
+            status: string;
+            transitProxyMissing: boolean;
+            upstreamProvider: string;
+            upstreamProxyName: string;
+        };
         UpdateEgressGroupRequest: {
             exclude_filter?: string;
             filter?: string;
+            interval?: number;
             landing_proxy?: string;
             mode?: string;
             provider?: string;
+            proxies?: string[];
         };
         UpdateLandingProxyRequest: {
             enabled?: boolean;
@@ -2646,12 +3211,21 @@ export interface components {
             egress_group?: string;
             listen?: string;
             port?: number;
+            route_mode?: string;
+            transit_route?: string;
             type?: string;
             udp?: boolean;
             users?: components["schemas"]["ListenerUser"][];
         };
         UpdatePasswordRequest: {
             password: string;
+        };
+        UpdateTransitRouteRequest: {
+            egress_group?: string;
+            enabled?: boolean;
+            notes?: string;
+            upstream_provider?: string;
+            upstream_proxy_name?: string;
         };
         UserIdentity: {
             username: string;

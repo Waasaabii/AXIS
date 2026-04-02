@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
 import useSWR from 'swr'
-import { api, ApiError, type GroupView, type LandingProxyView } from '@/services/api'
+import { api, ApiError, type GroupView, type LandingProxyView, type ProviderListItem } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +14,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Trash2, Pencil, AlertTriangle, RefreshCw, FolderPlus, HelpCircle, ChevronDown, Network, Route, Plus } from 'lucide-react'
+import { Trash2, Pencil, AlertTriangle, RefreshCw, FolderPlus, HelpCircle, ChevronDown, Network, Route, Plus, ShieldCheck, ArrowUp, ArrowDown, X } from 'lucide-react'
 
 /* ── Filter presets ── */
 const FILTER_PRESETS = [
@@ -29,6 +29,7 @@ const FILTER_PRESETS = [
 ]
 
 function formatGroupMode(mode: string) {
+  if (mode === 'fallback') return '顺序容灾'
   return mode === 'auto' ? '自动选择' : '手动选择'
 }
 
@@ -113,6 +114,17 @@ function FilterField({ value, onChange, disabled }: { value: string; onChange: (
 interface GroupForm { name: string; provider: string; mode: string; filter: string; landing_proxy: string }
 const emptyGroupForm: GroupForm = { name: '', provider: '', mode: 'manual', filter: '', landing_proxy: '' }
 
+interface FallbackGroupForm {
+  name: string
+  provider: string
+  proxies: string[]
+  search: string
+  landing_proxy: string
+  interval: string
+}
+
+const emptyFallbackGroupForm: FallbackGroupForm = { name: '', provider: '', proxies: [], search: '', landing_proxy: '', interval: '60' }
+
 interface LandingForm {
   name: string
   type: string
@@ -143,8 +155,10 @@ export default function Interfaces() {
   const { data: groups, mutate: mutateGroups } = useSWR('/api/groups', api.getGroups)
   const { data: landingProxies, mutate: mutateLandingProxies } = useSWR('/api/landing-proxies', api.getLandingProxies)
   const { data: configData, mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
+  const { data: providers } = useSWR('/api/providers', api.getProviders)
 
   const subscriptionNames = configData?.config.subscriptions.map((subscription) => subscription.name) || []
+  const providerList: ProviderListItem[] = providers || []
 
   const mutateAll = () => { mutateGroups(); mutateLandingProxies(); mutateConfig() }
 
@@ -163,8 +177,21 @@ export default function Interfaces() {
   const [groupForm, setGroupForm] = useState<GroupForm>({ ...emptyGroupForm })
   const [editingGroupName, setEditingGroupName] = useState('')
   const [groupSubmitting, setGroupSubmitting] = useState(false)
+  const [showAddFallbackGroup, setShowAddFallbackGroup] = useState(false)
+  const [showEditFallbackGroup, setShowEditFallbackGroup] = useState(false)
+  const [fallbackForm, setFallbackForm] = useState<FallbackGroupForm>({ ...emptyFallbackGroupForm })
+  const [editingFallbackGroupName, setEditingFallbackGroupName] = useState('')
+  const [fallbackSubmitting, setFallbackSubmitting] = useState(false)
   const [pendingDeleteGroupName, setPendingDeleteGroupName] = useState<string | null>(null)
   const [deletingGroup, setDeletingGroup] = useState(false)
+
+  const selectedFallbackProvider = providerList.find((provider) => provider.name === fallbackForm.provider)
+  const availableFallbackNodes = selectedFallbackProvider?.nodes || []
+  const fallbackSearch = fallbackForm.search.trim().toLowerCase()
+  const filteredFallbackNodes = availableFallbackNodes.filter((node) => {
+    if (!fallbackSearch) return true
+    return [node.name, node.server, node.type].filter(Boolean).some((value) => String(value).toLowerCase().includes(fallbackSearch))
+  })
 
   /* ════════════════════  Group handlers  ════════════════════ */
 
@@ -286,7 +313,81 @@ export default function Interfaces() {
     } catch (err) { toast.error(err instanceof ApiError ? err.message : '添加失败') } finally { setGroupSubmitting(false) }
   }
 
+  const resetFallbackForm = () => {
+    setFallbackForm({ ...emptyFallbackGroupForm })
+    setEditingFallbackGroupName('')
+  }
+
+  const handleFallbackProviderChange = (providerName: string) => {
+    const provider = providerList.find((item) => item.name === providerName)
+    const availableNames = new Set((provider?.nodes || []).map((node) => node.name))
+    setFallbackForm((current) => ({
+      ...current,
+      provider: providerName,
+      search: '',
+      proxies: current.proxies.filter((name) => availableNames.has(name)),
+    }))
+  }
+
+  const toggleFallbackProxy = (proxyName: string) => {
+    setFallbackForm((current) => {
+      const exists = current.proxies.includes(proxyName)
+      return {
+        ...current,
+        proxies: exists ? current.proxies.filter((item) => item !== proxyName) : [...current.proxies, proxyName],
+      }
+    })
+  }
+
+  const moveFallbackProxy = (index: number, direction: -1 | 1) => {
+    setFallbackForm((current) => {
+      const targetIndex = index + direction
+      if (targetIndex < 0 || targetIndex >= current.proxies.length) return current
+      const next = [...current.proxies]
+      const [item] = next.splice(index, 1)
+      next.splice(targetIndex, 0, item)
+      return { ...current, proxies: next }
+    })
+  }
+
+  const handleAddFallbackGroup = async () => {
+    if (!fallbackForm.name.trim() || !fallbackForm.provider) { toast.error('名称和订阅源不能为空'); return }
+    if (fallbackForm.proxies.length === 0) { toast.error('顺序容灾组至少需要选择一个节点'); return }
+    const interval = Number(fallbackForm.interval || 60)
+    if (!Number.isFinite(interval) || interval <= 0) { toast.error('检测频率必须是大于 0 的数字'); return }
+    setFallbackSubmitting(true)
+    try {
+      const data = await api.addEgressGroup({
+        name: fallbackForm.name.trim(),
+        provider: fallbackForm.provider,
+        mode: 'fallback',
+        proxies: fallbackForm.proxies,
+        landing_proxy: fallbackForm.landing_proxy || undefined,
+        interval,
+      })
+      if (!data.ok) throw new Error('创建失败')
+      mutateAll()
+      setShowAddFallbackGroup(false)
+      resetFallbackForm()
+      toast.success('顺序容灾组已创建。')
+    } catch (err) { toast.error(err instanceof ApiError ? err.message : '创建失败') } finally { setFallbackSubmitting(false) }
+  }
+
   const openEditGroup = (g: GroupView) => {
+    if (g.mode === 'fallback') {
+      const configGroup = configData?.config.egress_groups.find((item) => item.name === g.name)
+      setEditingFallbackGroupName(g.name)
+      setFallbackForm({
+        name: g.name,
+        provider: g.provider,
+        proxies: configGroup?.proxies || g.proxyOrder || [],
+        search: '',
+        landing_proxy: g.landingProxy || '',
+        interval: String(g.healthCheckInterval || 60),
+      })
+      setShowEditFallbackGroup(true)
+      return
+    }
     setEditingGroupName(g.name)
     setGroupForm({ name: g.name, provider: g.provider, mode: g.mode, filter: g.filter || '', landing_proxy: g.landingProxy || '' })
     setShowEditGroup(true)
@@ -307,6 +408,28 @@ export default function Interfaces() {
       setShowEditGroup(false)
       toast.success('出口线路已更新。')
     } catch (err) { toast.error(err instanceof ApiError ? err.message : '修改失败') } finally { setGroupSubmitting(false) }
+  }
+
+  const handleEditFallbackGroup = async () => {
+    if (!fallbackForm.provider) { toast.error('订阅源不能为空'); return }
+    if (fallbackForm.proxies.length === 0) { toast.error('顺序容灾组至少需要选择一个节点'); return }
+    const interval = Number(fallbackForm.interval || 60)
+    if (!Number.isFinite(interval) || interval <= 0) { toast.error('检测频率必须是大于 0 的数字'); return }
+    setFallbackSubmitting(true)
+    try {
+      const data = await api.updateEgressGroup(editingFallbackGroupName, {
+        provider: fallbackForm.provider,
+        mode: 'fallback',
+        proxies: fallbackForm.proxies,
+        landing_proxy: fallbackForm.landing_proxy || '',
+        interval,
+      })
+      if (!data.ok) throw new Error('修改失败')
+      mutateAll()
+      setShowEditFallbackGroup(false)
+      resetFallbackForm()
+      toast.success('顺序容灾组已更新。')
+    } catch (err) { toast.error(err instanceof ApiError ? err.message : '修改失败') } finally { setFallbackSubmitting(false) }
   }
 
   const handleDeleteGroup = async () => {
@@ -353,7 +476,11 @@ export default function Interfaces() {
             </Button>
             <Button onClick={() => { setGroupForm({ ...emptyGroupForm }); setShowAddGroup(true) }} disabled={subscriptionNames.length === 0}>
               <FolderPlus className="h-4 w-4" />
-              添加出口线路
+              添加单节点线路
+            </Button>
+            <Button variant="outline" onClick={() => { resetFallbackForm(); setShowAddFallbackGroup(true) }} disabled={subscriptionNames.length === 0}>
+              <ShieldCheck className="h-4 w-4" />
+              添加顺序容灾组
             </Button>
           </div>
         }
@@ -502,12 +629,23 @@ export default function Interfaces() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex gap-2 text-xs text-zinc-500 mb-3 flex-wrap">
-                    <span className="bg-zinc-100 px-2 py-1 rounded">可用节点 {g.candidateCount}</span>
+                    <span className="bg-zinc-100 px-2 py-1 rounded">{g.mode === 'fallback' ? `顺序节点 ${g.candidateCount}` : `可用节点 ${g.candidateCount}`}</span>
                     <span className="bg-zinc-100 px-2 py-1 rounded truncate max-w-[180px]" title={g.current || '还没有选中的节点'}>当前出口 {g.current || '还没有选中的节点'}</span>
                     <span className="bg-zinc-100 px-2 py-1 rounded truncate max-w-[260px]" title={buildRouteSummary(g)}>实际路径 {buildRouteSummary(g)}</span>
                     <span className="bg-zinc-100 px-2 py-1 rounded">{g.landingProxy ? `最终出口 ${g.landingProxy}` : '最终出口 直接出公网'}</span>
                   </div>
-                  {g.filter && <p className="text-xs text-zinc-500 font-mono mb-3 bg-zinc-50 p-2 rounded">筛选规则：{g.filter}</p>}
+                  {g.mode === 'fallback' ? (
+                    <div className="mb-3 rounded-lg border bg-zinc-50 p-3">
+                      <p className="text-xs text-zinc-500">顺序容灾顺位</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(g.proxyOrder || []).length > 0 ? (g.proxyOrder || []).map((name, index) => (
+                          <span key={name} className="rounded-full border bg-white px-2 py-1 text-xs text-zinc-700">
+                            #{index + 1} {name}
+                          </span>
+                        )) : <span className="text-xs text-zinc-400">还没有配置顺位</span>}
+                      </div>
+                    </div>
+                  ) : g.filter ? <p className="text-xs text-zinc-500 font-mono mb-3 bg-zinc-50 p-2 rounded">筛选规则：{g.filter}</p> : null}
 
                   {(g.providerMissing || g.providerDisabled || g.landingMissing || g.landingDisabled) && (
                     <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 p-2 rounded mb-3">
@@ -521,10 +659,10 @@ export default function Interfaces() {
                       <Select 
                         value={g.candidateCount > 0 ? g.currentValue : undefined} 
                         onValueChange={(val: string) => handleSelectGroup(g.name, val)}
-                        disabled={g.candidateCount === 0 || g.mode === 'auto'}
+                        disabled={g.candidateCount === 0 || g.mode === 'auto' || g.mode === 'fallback'}
                       >
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder={g.candidateCount === 0 ? "没有节点匹配这条线路" : g.mode === 'auto' ? "系统会自动选择更合适的节点" : "选择一个当前要使用的节点"} />
+                          <SelectValue placeholder={g.candidateCount === 0 ? "没有节点匹配这条线路" : g.mode === 'auto' ? "系统会自动选择更合适的节点" : g.mode === 'fallback' ? "顺序容灾组按顺位自动切换" : "选择一个当前要使用的节点"} />
                         </SelectTrigger>
                         <SelectContent>
                           {g.candidates?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} ({c.type})</SelectItem>)}
@@ -676,6 +814,52 @@ export default function Interfaces() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditGroup(false)}>取消</Button>
             <Button onClick={handleEditGroup} disabled={groupSubmitting}>{groupSubmitting ? '保存中...' : '保存线路'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAddFallbackGroup} onOpenChange={setShowAddFallbackGroup}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>新建顺序容灾组</DialogTitle>
+            <DialogDescription>按顺位挑出一组固定节点。排在前面的节点不可用时，流量会自动切到后面的候补节点。</DialogDescription>
+          </DialogHeader>
+          <FallbackGroupEditor
+            fallbackForm={fallbackForm}
+            setFallbackForm={setFallbackForm}
+            subscriptionNames={subscriptionNames}
+            landingProxies={landingProxies || []}
+            filteredFallbackNodes={filteredFallbackNodes}
+            onProviderChange={handleFallbackProviderChange}
+            onToggleProxy={toggleFallbackProxy}
+            onMoveProxy={moveFallbackProxy}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddFallbackGroup(false)}>取消</Button>
+            <Button onClick={handleAddFallbackGroup} disabled={fallbackSubmitting}>{fallbackSubmitting ? '创建中...' : '创建顺序容灾组'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditFallbackGroup} onOpenChange={setShowEditFallbackGroup}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>编辑顺序容灾组：{editingFallbackGroupName}</DialogTitle>
+            <DialogDescription>你可以调整订阅源、顺位列表、健康检查频率和最终落地出口。</DialogDescription>
+          </DialogHeader>
+          <FallbackGroupEditor
+            fallbackForm={fallbackForm}
+            setFallbackForm={setFallbackForm}
+            subscriptionNames={subscriptionNames}
+            landingProxies={landingProxies || []}
+            filteredFallbackNodes={filteredFallbackNodes}
+            onProviderChange={handleFallbackProviderChange}
+            onToggleProxy={toggleFallbackProxy}
+            onMoveProxy={moveFallbackProxy}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditFallbackGroup(false)}>取消</Button>
+            <Button onClick={handleEditFallbackGroup} disabled={fallbackSubmitting}>{fallbackSubmitting ? '保存中...' : '保存顺序容灾组'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -847,6 +1031,118 @@ export default function Interfaces() {
         confirming={deletingLanding}
         onConfirm={handleDeleteLanding}
       />
+    </div>
+  )
+}
+
+function FallbackGroupEditor({
+  fallbackForm,
+  setFallbackForm,
+  subscriptionNames,
+  landingProxies,
+  filteredFallbackNodes,
+  onProviderChange,
+  onToggleProxy,
+  onMoveProxy,
+}: {
+  fallbackForm: FallbackGroupForm
+  setFallbackForm: Dispatch<SetStateAction<FallbackGroupForm>>
+  subscriptionNames: string[]
+  landingProxies: LandingProxyView[]
+  filteredFallbackNodes: ProviderListItem['nodes']
+  onProviderChange: (providerName: string) => void
+  onToggleProxy: (proxyName: string) => void
+  onMoveProxy: (index: number, direction: -1 | 1) => void
+}) {
+  return (
+    <div className="space-y-4 py-2">
+      <div className="space-y-2">
+        <Label>线路名称</Label>
+        <Input placeholder="例如：香港顺序容灾、日本主备切换" value={fallbackForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFallbackForm({ ...fallbackForm, name: e.target.value })} />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>数据来源</Label>
+          <Select value={fallbackForm.provider} onValueChange={onProviderChange}>
+            <SelectTrigger><SelectValue placeholder="选择订阅源" /></SelectTrigger>
+            <SelectContent>{subscriptionNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>检测频率（秒）</Label>
+          <Input type="number" value={fallbackForm.interval} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFallbackForm({ ...fallbackForm, interval: e.target.value })} />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>最终出口</Label>
+        <Select value={landingSelectValue(fallbackForm.landing_proxy)} onValueChange={(val: string) => setFallbackForm({ ...fallbackForm, landing_proxy: val === NO_LANDING_VALUE ? '' : val })}>
+          <SelectTrigger><SelectValue placeholder="直接出公网，或者选择一个落地节点" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_LANDING_VALUE}>直接出公网</SelectItem>
+            {landingProxies.map((landing) => <SelectItem key={landing.name} value={landing.name}>{landing.name}{landing.enabled ? '' : '（已停用）'}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>搜索节点</Label>
+        <Input placeholder="按名称、地址或协议筛选可加入顺位的节点" value={fallbackForm.search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFallbackForm({ ...fallbackForm, search: e.target.value })} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-2">
+          <Label>可加入顺位的节点</Label>
+          <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border bg-zinc-50 p-3">
+            {filteredFallbackNodes.length === 0 ? (
+              <p className="text-sm text-zinc-500">当前订阅还没有可选节点。先刷新订阅，或换一个已经拿到节点缓存的数据源。</p>
+            ) : filteredFallbackNodes.map((node) => {
+              const selected = fallbackForm.proxies.includes(node.name)
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() => onToggleProxy(node.name)}
+                  className={`flex w-full items-start justify-between rounded-lg border px-3 py-2 text-left transition-colors ${selected ? 'border-emerald-200 bg-emerald-50' : 'border-zinc-200 bg-white hover:bg-zinc-50'}`}
+                >
+                  <div>
+                    <div className="text-sm font-medium text-zinc-900">{node.name}</div>
+                    <div className="text-xs text-zinc-500">{node.server}:{node.port} · {node.type}</div>
+                  </div>
+                  <div className={`rounded-full px-2 py-1 text-xs ${selected ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                    {selected ? '已加入' : '加入顺位'}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>当前顺位</Label>
+          <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border bg-zinc-50 p-3">
+            {fallbackForm.proxies.length === 0 ? (
+              <p className="text-sm text-zinc-500">还没有选择任何节点。左侧点击节点后，这里会按顺位展示主用和候补节点。</p>
+            ) : fallbackForm.proxies.map((name, index) => (
+              <div key={`${name}-${index}`} className="rounded-lg border bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-zinc-900">#{index + 1} {name}</div>
+                    <div className="text-xs text-zinc-500">{index === 0 ? '主用节点' : '候补节点'}</div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" onClick={() => onMoveProxy(index, -1)} disabled={index === 0}>
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={() => onMoveProxy(index, 1)} disabled={index === fallbackForm.proxies.length - 1}>
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={() => onToggleProxy(name)}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

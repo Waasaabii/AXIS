@@ -142,6 +142,16 @@ func (m *MihomoControllerAdapter) SelectProxy(groupName, proxyName string) (*con
 	return m.request("/proxies/"+url.PathEscape(groupName), http.MethodPut, strings.NewReader(string(body)))
 }
 
+func (m *MihomoControllerAdapter) HealthcheckGroup(groupName, targetURL string, timeoutMs int) (*controllerResult, error) {
+	if m.renderOnly {
+		return &controllerResult{OK: false, Payload: map[string]any{"deferred": true, "message": "当前只保存配置，暂不执行运行态检测。"}}, nil
+	}
+	query := url.Values{}
+	query.Set("url", firstNonEmpty(targetURL, "https://www.gstatic.com/generate_204"))
+	query.Set("timeout", fmt.Sprintf("%d", max(timeoutMs, 1000)))
+	return m.request("/group/"+url.PathEscape(groupName)+"/delay?"+query.Encode(), http.MethodGet, nil)
+}
+
 func (m *MihomoControllerAdapter) ReloadConfig(configPath string) (*controllerResult, error) {
 	if m.renderOnly {
 		return &controllerResult{OK: false, Payload: map[string]any{"deferred": true, "message": "当前只生成配置文件，暂不会下发到代理核心。"}}, nil
@@ -151,10 +161,26 @@ func (m *MihomoControllerAdapter) ReloadConfig(configPath string) (*controllerRe
 }
 
 func buildProvider(subscription Subscription) map[string]any {
+	if isManualProviderType(subscription.Type) {
+		return map[string]any{
+			"type":     "file",
+			"path":     fmt.Sprintf("providers/%s", providerFileName(subscription.Name)),
+			"interval": max(subscription.Interval, 3600),
+			"health-check": map[string]any{
+				"enable":          true,
+				"url":             firstNonEmpty(subscription.HealthCheckURL, "https://www.gstatic.com/generate_204"),
+				"interval":        max(subscription.HealthCheckInterval, 300),
+				"timeout":         5000,
+				"lazy":            true,
+				"expected-status": 204,
+			},
+		}
+	}
+
 	return map[string]any{
 		"type":     "http",
 		"url":      subscription.URL,
-		"path":     fmt.Sprintf("providers/%s.yaml", subscription.Name),
+		"path":     fmt.Sprintf("providers/%s", providerFileName(subscription.Name)),
 		"interval": max(subscription.Interval, 3600),
 		"health-check": map[string]any{
 			"enable":          true,
@@ -167,11 +193,48 @@ func buildProvider(subscription Subscription) map[string]any {
 	}
 }
 
-func buildGroup(group EgressGroup) map[string]any {
-	return buildRuntimeGroup(group, group.Name)
+func buildFallbackMemberGroup(member FallbackRuntimeMember, providerName string) map[string]any {
+	return map[string]any{
+		"name":   member.RuntimeGroupName,
+		"type":   "select",
+		"use":    []string{providerName},
+		"filter": member.Filter,
+	}
 }
 
-func buildRuntimeGroup(group EgressGroup, name string) map[string]any {
+func buildTransitUpstreamGroup(route TransitRoute) map[string]any {
+	return map[string]any{
+		"name":   buildTransitUpstreamGroupName(route.Name),
+		"type":   "select",
+		"use":    []string{route.UpstreamProvider},
+		"filter": buildTransitExactFilter(route.UpstreamProxyName),
+	}
+}
+
+func buildTransitMirrorProvider(route TransitRoute, targetGroup EgressGroup, targetSubscription Subscription) map[string]any {
+	return map[string]any{
+		"type":     "file",
+		"path":     fmt.Sprintf("providers/%s", providerFileName(targetGroup.Provider)),
+		"interval": max(targetSubscription.Interval, 3600),
+		"health-check": map[string]any{
+			"enable":          true,
+			"url":             firstNonEmpty(targetSubscription.HealthCheckURL, "https://www.gstatic.com/generate_204"),
+			"interval":        max(targetSubscription.HealthCheckInterval, 300),
+			"timeout":         5000,
+			"lazy":            true,
+			"expected-status": 204,
+		},
+		"override": map[string]any{
+			"dialer-proxy": buildTransitUpstreamGroupName(route.Name),
+		},
+	}
+}
+
+func buildGroup(group EgressGroup, availableProxyNames []string) map[string]any {
+	return buildRuntimeGroup(group, group.Name, availableProxyNames)
+}
+
+func buildRuntimeGroup(group EgressGroup, name string, availableProxyNames []string) map[string]any {
 	mode := firstNonEmpty(group.Mode, "manual")
 	groupType := "select"
 	if mode == "fallback" {
@@ -184,18 +247,35 @@ func buildRuntimeGroup(group EgressGroup, name string) map[string]any {
 	base := map[string]any{
 		"name": name,
 		"type": groupType,
-		"use":  []string{group.Provider},
 	}
-	if group.Filter != "" {
-		base["filter"] = group.Filter
-	}
-	if group.ExcludeFilter != "" {
-		base["exclude-filter"] = group.ExcludeFilter
+	if mode == "fallback" {
+		members := buildFallbackRuntimeMembers(group, availableProxyNames)
+		proxies := make([]string, 0, len(members))
+		for _, member := range members {
+			proxies = append(proxies, member.RuntimeGroupName)
+		}
+		if len(proxies) == 0 {
+			proxies = append(proxies, "REJECT")
+		}
+		base["proxies"] = proxies
+	} else {
+		base["use"] = []string{group.Provider}
+		if group.Filter != "" {
+			base["filter"] = group.Filter
+		}
+		if group.ExcludeFilter != "" {
+			base["exclude-filter"] = group.ExcludeFilter
+		}
 	}
 	if mode != "manual" {
 		base["url"] = firstNonEmpty(group.HealthCheckURL, "https://www.gstatic.com/generate_204")
-		base["interval"] = max(group.Interval, 300)
-		base["lazy"] = true
+		if mode == "fallback" {
+			base["interval"] = max(group.Interval, 60)
+			base["lazy"] = false
+		} else {
+			base["interval"] = max(group.Interval, 300)
+			base["lazy"] = true
+		}
 		base["timeout"] = 5000
 	}
 	return base
@@ -234,7 +314,7 @@ func buildLandingProxy(landing LandingProxy) map[string]any {
 	return proxy
 }
 
-func buildListener(listener Listener) map[string]any {
+func buildRenderedListener(listener Listener, proxyName string) map[string]any {
 	return map[string]any{
 		"name":   listener.Name,
 		"type":   firstNonEmpty(listener.Type, "socks"),
@@ -242,15 +322,17 @@ func buildListener(listener Listener) map[string]any {
 		"port":   listener.Port,
 		"udp":    listener.UDP,
 		"users":  listener.Users,
-		"proxy":  listener.EgressGroup,
+		"proxy":  proxyName,
 	}
 }
 
 func RenderMihomoConfig(config *Config) (string, error) {
 	enabledProviders := map[string]struct{}{}
+	providerSources := map[string]Subscription{}
 	for _, subscription := range config.Subscriptions {
 		if subscription.Enabled {
 			enabledProviders[subscription.Name] = struct{}{}
+			providerSources[subscription.Name] = subscription
 		}
 	}
 
@@ -265,22 +347,38 @@ func RenderMihomoConfig(config *Config) (string, error) {
 	}
 
 	validGroups := map[string]struct{}{}
-	groups := make([]map[string]any, 0, len(config.EgressGroups)*2)
+	providerNodeCatalog := map[string][]string{}
+	for _, subscription := range config.Subscriptions {
+		if !subscription.Enabled {
+			continue
+		}
+		if isManualProviderType(subscription.Type) {
+			providerNodeCatalog[subscription.Name] = []string{subscription.Name}
+		}
+	}
+
+	groups := make([]map[string]any, 0, len(config.EgressGroups)*3)
 	for _, group := range config.EgressGroups {
 		if _, ok := enabledProviders[group.Provider]; !ok {
 			continue
+		}
+		availableProxyNames := providerNodeCatalog[group.Provider]
+		if group.Mode == "fallback" {
+			for _, member := range buildFallbackRuntimeMembers(group, availableProxyNames) {
+				groups = append(groups, buildFallbackMemberGroup(member, group.Provider))
+			}
 		}
 		if group.LandingProxy != "" {
 			if _, ok := enabledLandings[group.LandingProxy]; !ok {
 				continue
 			}
-			groups = append(groups, buildRuntimeGroup(group, relaySourceGroupName(group.Name)))
+			groups = append(groups, buildRuntimeGroup(group, relaySourceGroupName(group.Name), availableProxyNames))
 			groups = append(groups, buildRelayGroup(group))
 			validGroups[group.Name] = struct{}{}
 			continue
 		}
 		validGroups[group.Name] = struct{}{}
-		groups = append(groups, buildGroup(group))
+		groups = append(groups, buildGroup(group, availableProxyNames))
 	}
 
 	providers := map[string]any{}
@@ -291,15 +389,76 @@ func RenderMihomoConfig(config *Config) (string, error) {
 		providers[subscription.Name] = buildProvider(subscription)
 	}
 
+	transitTargets := map[string]string{}
+	for _, route := range config.TransitRoutes {
+		if !isTransitRouteEnabled(route) {
+			continue
+		}
+		if _, ok := enabledProviders[route.UpstreamProvider]; !ok {
+			continue
+		}
+
+		var targetGroup *EgressGroup
+		for index := range config.EgressGroups {
+			if config.EgressGroups[index].Name == route.EgressGroup {
+				targetGroup = &config.EgressGroups[index]
+				break
+			}
+		}
+		if targetGroup == nil {
+			continue
+		}
+		if _, ok := enabledProviders[targetGroup.Provider]; !ok {
+			continue
+		}
+		if targetGroup.LandingProxy != "" {
+			if _, ok := enabledLandings[targetGroup.LandingProxy]; !ok {
+				continue
+			}
+		}
+
+		mirrorProviderName := buildTransitMirrorProviderName(route.Name)
+		mirrorGroupName := buildTransitMirrorGroupName(route.Name)
+		mirroredGroup := *targetGroup
+		mirroredGroup.Name = mirrorGroupName
+		mirroredGroup.Provider = mirrorProviderName
+
+		groups = append(groups, buildTransitUpstreamGroup(route))
+		if source, ok := providerSources[targetGroup.Provider]; ok {
+			providers[mirrorProviderName] = buildTransitMirrorProvider(route, *targetGroup, source)
+		}
+		providerNodeCatalog[mirrorProviderName] = providerNodeCatalog[targetGroup.Provider]
+
+		if mirroredGroup.Mode == "fallback" {
+			for _, member := range buildFallbackRuntimeMembers(mirroredGroup, providerNodeCatalog[mirrorProviderName]) {
+				groups = append(groups, buildFallbackMemberGroup(member, mirrorProviderName))
+			}
+		}
+
+		if mirroredGroup.LandingProxy != "" {
+			groups = append(groups, buildRuntimeGroup(mirroredGroup, relaySourceGroupName(mirrorGroupName), providerNodeCatalog[mirrorProviderName]))
+			groups = append(groups, buildRelayGroup(mirroredGroup))
+		} else {
+			groups = append(groups, buildGroup(mirroredGroup, providerNodeCatalog[mirrorProviderName]))
+		}
+		transitTargets[route.Name] = mirrorGroupName
+	}
+
 	listeners := []map[string]any{}
 	for _, listener := range config.Listeners {
 		if !listener.Enabled {
 			continue
 		}
-		if _, ok := validGroups[listener.EgressGroup]; !ok {
+		proxyName := ""
+		if getListenerRouteMode(listener) == "transit" {
+			proxyName = transitTargets[listener.TransitRoute]
+		} else if _, ok := validGroups[listener.EgressGroup]; ok {
+			proxyName = listener.EgressGroup
+		}
+		if proxyName == "" {
 			continue
 		}
-		listeners = append(listeners, buildListener(listener))
+		listeners = append(listeners, buildRenderedListener(listener, proxyName))
 	}
 
 	document := map[string]any{
@@ -539,6 +698,10 @@ func userAgentForType(subscriptionType string) string {
 }
 
 func FetchProviderSnapshot(subscription Subscription) (*ProviderRecord, bool, int, string, error) {
+	if isManualProviderType(subscription.Type) {
+		return buildManualProviderSnapshot(subscription), true, http.StatusOK, "manual", nil
+	}
+
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest(http.MethodGet, subscription.URL, nil)
 	if err != nil {

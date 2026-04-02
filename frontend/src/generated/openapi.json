@@ -9,6 +9,9 @@
           "filter": {
             "type": "string"
           },
+          "interval": {
+            "type": "integer"
+          },
           "landing_proxy": {
             "type": "string"
           },
@@ -20,6 +23,12 @@
           },
           "provider": {
             "type": "string"
+          },
+          "proxies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -85,6 +94,12 @@
           "port": {
             "type": "integer"
           },
+          "route_mode": {
+            "type": "string"
+          },
+          "transit_route": {
+            "type": "string"
+          },
           "type": {
             "type": "string"
           },
@@ -100,8 +115,7 @@
         },
         "required": [
           "name",
-          "port",
-          "egress_group"
+          "port"
         ],
         "type": "object"
       },
@@ -116,10 +130,22 @@
           "health_check_url": {
             "type": "string"
           },
+          "import_text": {
+            "type": "string"
+          },
           "interval": {
             "type": "integer"
           },
           "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "server": {
             "type": "string"
           },
           "type": {
@@ -127,11 +153,39 @@
           },
           "url": {
             "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AddTransitRouteRequest": {
+        "properties": {
+          "egress_group": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "upstream_provider": {
+            "type": "string"
+          },
+          "upstream_proxy_name": {
+            "type": "string"
           }
         },
         "required": [
           "name",
-          "url"
+          "upstream_provider",
+          "upstream_proxy_name",
+          "egress_group"
         ],
         "type": "object"
       },
@@ -197,6 +251,12 @@
           "subscriptions": {
             "items": {
               "$ref": "#/components/schemas/Subscription"
+            },
+            "type": "array"
+          },
+          "transit_routes": {
+            "items": {
+              "$ref": "#/components/schemas/TransitRoute"
             },
             "type": "array"
           }
@@ -289,6 +349,138 @@
         ],
         "type": "object"
       },
+      "DynamicProxyErrorResponse": {
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "DynamicProxyHealthResponse": {
+        "properties": {
+          "auth_required": {
+            "type": "boolean"
+          },
+          "pool": {
+            "$ref": "#/components/schemas/DynamicProxyPool"
+          },
+          "request_host": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "version",
+          "time",
+          "auth_required",
+          "pool",
+          "request_host"
+        ],
+        "type": "object"
+      },
+      "DynamicProxyNextResponse": {
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "data": {
+            "properties": {
+              "city": {
+                "type": "string"
+              },
+              "current_proxy": {
+                "type": "string"
+              },
+              "egress_group": {
+                "type": "string"
+              },
+              "listener": {
+                "type": "string"
+              },
+              "protocol": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "proxy": {
+                "type": "string"
+              },
+              "region": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "proxy",
+              "provider",
+              "protocol",
+              "listener",
+              "egress_group"
+            ],
+            "type": "object"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "type": "object"
+      },
+      "DynamicProxyPool": {
+        "properties": {
+          "available": {
+            "type": "integer"
+          },
+          "cooling": {
+            "type": "integer"
+          },
+          "disabled": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "available",
+          "cooling",
+          "disabled"
+        ],
+        "type": "object"
+      },
       "EgressGroup": {
         "properties": {
           "exclude_filter": {
@@ -317,6 +509,12 @@
           },
           "provider": {
             "type": "string"
+          },
+          "proxies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "strategy": {
             "type": "string"
@@ -440,7 +638,16 @@
           "currentValue": {
             "type": "string"
           },
+          "excludeFilter": {
+            "type": "string"
+          },
           "filter": {
+            "type": "string"
+          },
+          "healthCheckInterval": {
+            "type": "integer"
+          },
+          "healthCheckURL": {
             "type": "string"
           },
           "landingDisabled": {
@@ -469,6 +676,12 @@
           },
           "providerMissing": {
             "type": "boolean"
+          },
+          "proxyOrder": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "routeSummary": {
             "type": "string"
@@ -602,6 +815,12 @@
           "port": {
             "type": "integer"
           },
+          "route_mode": {
+            "type": "string"
+          },
+          "transit_route": {
+            "type": "string"
+          },
           "type": {
             "type": "string"
           },
@@ -622,8 +841,7 @@
           "port",
           "udp",
           "enabled",
-          "users",
-          "egress_group"
+          "users"
         ],
         "type": "object"
       },
@@ -650,6 +868,9 @@
           "egressGroup": {
             "type": "string"
           },
+          "enabled": {
+            "type": "boolean"
+          },
           "groupMissing": {
             "type": "boolean"
           },
@@ -674,10 +895,28 @@
           "providerMissing": {
             "type": "boolean"
           },
+          "routeMode": {
+            "type": "string"
+          },
           "routeSummary": {
             "type": "string"
           },
           "status": {
+            "type": "string"
+          },
+          "targetName": {
+            "type": "string"
+          },
+          "transitDisabled": {
+            "type": "boolean"
+          },
+          "transitMissing": {
+            "type": "boolean"
+          },
+          "transitProxyMissing": {
+            "type": "boolean"
+          },
+          "transitRoute": {
             "type": "string"
           },
           "type": {
@@ -702,15 +941,20 @@
           "listen",
           "port",
           "udp",
+          "enabled",
           "users",
           "userCount",
+          "routeMode",
           "egressGroup",
           "status",
           "groupMissing",
           "providerMissing",
           "providerDisabled",
           "landingMissing",
-          "landingDisabled"
+          "landingDisabled",
+          "transitMissing",
+          "transitDisabled",
+          "transitProxyMissing"
         ],
         "type": "object"
       },
@@ -948,11 +1192,20 @@
           "enabled": {
             "type": "boolean"
           },
+          "endpoint": {
+            "type": "string"
+          },
+          "hasCredentials": {
+            "type": "boolean"
+          },
           "interval": {
             "type": "integer"
           },
           "lastError": {
             "type": "string"
+          },
+          "manual": {
+            "type": "boolean"
           },
           "name": {
             "type": "string"
@@ -969,6 +1222,9 @@
           "refreshedAt": {
             "type": "string"
           },
+          "sourceKind": {
+            "type": "string"
+          },
           "type": {
             "type": "string"
           },
@@ -980,10 +1236,14 @@
           "name",
           "type",
           "urlMasked",
+          "endpoint",
           "interval",
           "enabled",
           "nodeCount",
-          "nodes"
+          "nodes",
+          "sourceKind",
+          "manual",
+          "hasCredentials"
         ],
         "type": "object"
       },
@@ -1532,6 +1792,9 @@
           },
           "providers": {
             "type": "integer"
+          },
+          "transitRoutes": {
+            "type": "integer"
           }
         },
         "required": [
@@ -1601,10 +1864,22 @@
           "name": {
             "type": "string"
           },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "server": {
+            "type": "string"
+          },
           "type": {
             "type": "string"
           },
           "url": {
+            "type": "string"
+          },
+          "username": {
             "type": "string"
           },
           "via": {
@@ -1614,7 +1889,6 @@
         "required": [
           "name",
           "type",
-          "url",
           "interval",
           "enabled"
         ],
@@ -1631,6 +1905,153 @@
         ],
         "type": "object"
       },
+      "TransitRoute": {
+        "properties": {
+          "egress_group": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "upstream_provider": {
+            "type": "string"
+          },
+          "upstream_proxy_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "enabled",
+          "upstream_provider",
+          "upstream_proxy_name",
+          "egress_group"
+        ],
+        "type": "object"
+      },
+      "TransitRouteMutationResponse": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "route": {
+            "$ref": "#/components/schemas/TransitRouteView"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeCommandResult"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "TransitRouteView": {
+        "properties": {
+          "candidateCount": {
+            "type": "integer"
+          },
+          "currentProxy": {
+            "type": "string"
+          },
+          "egressGroup": {
+            "type": "string"
+          },
+          "egressGroupMissing": {
+            "type": "boolean"
+          },
+          "egressGroupMode": {
+            "type": "string"
+          },
+          "egressProviderDisabled": {
+            "type": "boolean"
+          },
+          "egressProviderMissing": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "landingDisabled": {
+            "type": "boolean"
+          },
+          "landingMissing": {
+            "type": "boolean"
+          },
+          "lastTestDelay": {
+            "type": "integer"
+          },
+          "lastTestMessage": {
+            "type": "string"
+          },
+          "lastTestStatus": {
+            "type": "string"
+          },
+          "lastTestUrl": {
+            "type": "string"
+          },
+          "lastTestedAt": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "providerDisabled": {
+            "type": "boolean"
+          },
+          "providerMissing": {
+            "type": "boolean"
+          },
+          "routeSummary": {
+            "type": "string"
+          },
+          "runtimeGroupName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "transitProxyMissing": {
+            "type": "boolean"
+          },
+          "upstreamProvider": {
+            "type": "string"
+          },
+          "upstreamProxyName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "enabled",
+          "upstreamProvider",
+          "upstreamProxyName",
+          "egressGroup",
+          "candidateCount",
+          "status",
+          "providerMissing",
+          "providerDisabled",
+          "transitProxyMissing",
+          "egressGroupMissing",
+          "egressProviderMissing",
+          "egressProviderDisabled",
+          "landingMissing",
+          "landingDisabled"
+        ],
+        "type": "object"
+      },
       "UpdateEgressGroupRequest": {
         "properties": {
           "exclude_filter": {
@@ -1638,6 +2059,9 @@
           },
           "filter": {
             "type": "string"
+          },
+          "interval": {
+            "type": "integer"
           },
           "landing_proxy": {
             "type": "string"
@@ -1647,6 +2071,12 @@
           },
           "provider": {
             "type": "string"
+          },
+          "proxies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -1694,6 +2124,12 @@
           "port": {
             "type": "integer"
           },
+          "route_mode": {
+            "type": "string"
+          },
+          "transit_route": {
+            "type": "string"
+          },
           "type": {
             "type": "string"
           },
@@ -1718,6 +2154,26 @@
         "required": [
           "password"
         ],
+        "type": "object"
+      },
+      "UpdateTransitRouteRequest": {
+        "properties": {
+          "egress_group": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "upstream_provider": {
+            "type": "string"
+          },
+          "upstream_proxy_name": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "UserIdentity": {
@@ -2263,6 +2719,23 @@
           }
         },
         "summary": "切换出口线路节点"
+      }
+    },
+    "/api/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicProxyHealthResponse"
+                }
+              }
+            },
+            "description": "动态代理健康信息"
+          }
+        },
+        "summary": "动态代理服务健康状态"
       }
     },
     "/api/landing-proxies": {
@@ -3051,6 +3524,113 @@
         "summary": "刷新订阅"
       }
     },
+    "/api/proxy/next": {
+      "get": {
+        "parameters": [
+          {
+            "description": "期望协议：http 或 socks5",
+            "in": "query",
+            "name": "protocol",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "地区筛选",
+            "in": "query",
+            "name": "region",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "城市筛选",
+            "in": "query",
+            "name": "city",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "标签筛选",
+            "in": "query",
+            "name": "tag",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "粘性会话标识",
+            "in": "query",
+            "name": "session",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "返回格式：text 或 json",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicProxyNextResponse"
+                }
+              }
+            },
+            "description": "JSON 模式下的代理结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicProxyErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicProxyErrorResponse"
+                }
+              }
+            },
+            "description": "当前筛选条件无可用代理"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicProxyErrorResponse"
+                }
+              }
+            },
+            "description": "请求过于频繁"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicProxyErrorResponse"
+                }
+              }
+            },
+            "description": "当前无可用代理"
+          }
+        },
+        "summary": "获取下一个可用代理"
+      }
+    },
     "/api/reload": {
       "post": {
         "responses": {
@@ -3531,6 +4111,305 @@
           }
         },
         "summary": "启停订阅"
+      }
+    },
+    "/api/transit-routes": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TransitRouteView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "中转线路视图"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "中转线路列表"
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTransitRouteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "创建中转线路"
+      }
+    },
+    "/api/transit-routes/{name}": {
+      "delete": {
+        "parameters": [
+          {
+            "description": "中转线路名称",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "删除中转线路"
+      }
+    },
+    "/api/transit-routes/{name}/healthcheck": {
+      "post": {
+        "parameters": [
+          {
+            "description": "中转线路名称",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitRouteMutationResponse"
+                }
+              }
+            },
+            "description": "健康检查结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "中转线路不存在"
+          }
+        },
+        "summary": "执行中转线路健康检查"
+      }
+    },
+    "/api/transit-routes/{name}/update": {
+      "put": {
+        "parameters": [
+          {
+            "description": "中转线路名称",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTransitRouteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "更新中转线路"
       }
     }
   }

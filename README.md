@@ -253,7 +253,40 @@ pnpm run hash-password -- <your-password>
 
 ## API 一览
 
-所有 API 都以 `/api/` 开头，先通过 `POST /api/session` 登录。
+AXIS 现在有两类 API：
+
+- 公共动态代理 API：给外部程序直接取代理，不需要登录
+- 控制面 API：给控制台和运维使用，需要先登录
+
+### 公共动态代理 API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/health` | 查看动态代理服务健康状态 |
+| GET | `/api/proxy/next` | 获取下一个可用代理，默认返回 `text/plain` |
+
+`/api/proxy/next` 支持这些可选查询参数：
+
+| 参数 | 说明 |
+|------|------|
+| `protocol` | 期望协议，支持 `http` 或 `socks5` |
+| `region` | 地区筛选 |
+| `city` | 城市筛选 |
+| `tag` | 标签筛选 |
+| `session` | 粘性会话标识 |
+| `format` | 返回格式，支持 `text` 或 `json` |
+
+默认返回示例：
+
+```text
+socks5://username:password@proxy.example.com:10801
+```
+
+如果你传 `?format=json`，会返回带元信息的 JSON。
+
+### 控制面 API
+
+所有控制面 API 都以 `/api/` 开头，先通过 `POST /api/session` 登录。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|

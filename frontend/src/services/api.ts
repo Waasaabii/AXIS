@@ -21,6 +21,10 @@ export type ProviderListItem = Schemas["ProviderListItem"]
 export type ProviderRefreshResponse = Schemas["ProviderRefreshResponse"]
 export type GroupView = Schemas["GroupView"]
 export type GroupMutationResponse = Schemas["GroupMutationResponse"]
+export type TransitRouteView = Schemas["TransitRouteView"]
+export type TransitRouteMutationResponse = Schemas["TransitRouteMutationResponse"]
+export type AddTransitRouteRequest = Schemas["AddTransitRouteRequest"]
+export type UpdateTransitRouteRequest = Schemas["UpdateTransitRouteRequest"]
 export type SelectGroupRequest = Schemas["SelectGroupRequest"]
 export type LandingProxyView = Schemas["LandingProxyView"]
 export type AddLandingProxyRequest = Schemas["AddLandingProxyRequest"]
@@ -96,6 +100,7 @@ export const api = {
   refreshProvider: (name: string) =>
     requestJson<ProviderRefreshResponse>(`/api/providers/${encodeURIComponent(name)}/refresh`, { method: "POST" }),
   getGroups: () => requestJson<GroupView[]>("/api/groups"),
+  getTransitRoutes: () => requestJson<TransitRouteView[]>("/api/transit-routes"),
   getLandingProxies: () => requestJson<LandingProxyView[]>("/api/landing-proxies"),
   selectGroup: (groupName: string, body: SelectGroupRequest) =>
     requestJson<GroupMutationResponse>(`/api/groups/${encodeURIComponent(groupName)}/select`, {
@@ -104,6 +109,17 @@ export const api = {
     }),
   healthcheckGroup: (groupName: string) =>
     requestJson<GroupMutationResponse>(`/api/groups/${encodeURIComponent(groupName)}/healthcheck`, { method: "POST" }),
+  addTransitRoute: (body: AddTransitRouteRequest) =>
+    requestJson<SaveConfigResponse>("/api/transit-routes", { method: "POST", body: JSON.stringify(body) }),
+  updateTransitRoute: (name: string, body: UpdateTransitRouteRequest) =>
+    requestJson<SaveConfigResponse>(`/api/transit-routes/${encodeURIComponent(name)}/update`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteTransitRoute: (name: string) =>
+    requestJson<SaveConfigResponse>(`/api/transit-routes/${encodeURIComponent(name)}`, { method: "DELETE" }),
+  healthcheckTransitRoute: (name: string) =>
+    requestJson<TransitRouteMutationResponse>(`/api/transit-routes/${encodeURIComponent(name)}/healthcheck`, { method: "POST" }),
   addLandingProxy: (body: AddLandingProxyRequest) =>
     requestJson<SaveConfigResponse>("/api/landing-proxies", { method: "POST", body: JSON.stringify(body) }),
   updateLandingProxy: (name: string, body: UpdateLandingProxyRequest) =>

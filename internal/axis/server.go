@@ -2,6 +2,7 @@ package axis
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -10,13 +11,14 @@ import (
 )
 
 type Server struct {
-	service   *Service
-	publicDir string
+	service      *Service
+	dynamicProxy *DynamicProxyService
+	publicDir    string
 }
 
 func NewServer(service *Service) *Server {
 	publicDir := resolvePublicDir(service)
-	return &Server{service: service, publicDir: publicDir}
+	return &Server{service: service, dynamicProxy: NewDynamicProxyService(service), publicDir: publicDir}
 }
 
 func resolvePublicDir(service *Service) string {
@@ -32,7 +34,9 @@ func resolvePublicDir(service *Service) string {
 		executableRoot := filepath.Dir(filepath.Dir(executable))
 		candidates = append(candidates, filepath.Join(executableRoot, "frontend", "dist"))
 	}
-	candidates = append(candidates, filepath.Join(filepath.Dir(service.layout.RootDir), "frontend", "dist"))
+	if service != nil && service.layout != nil && service.layout.RootDir != "" {
+		candidates = append(candidates, filepath.Join(filepath.Dir(service.layout.RootDir), "frontend", "dist"))
+	}
 
 	for _, candidate := range candidates {
 		if stat, err := os.Stat(candidate); err == nil && stat.IsDir() {
@@ -68,6 +72,12 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
+func writeText(w http.ResponseWriter, status int, contentType, payload string) {
+	w.Header().Set("Content-Type", contentType)
+	w.WriteHeader(status)
+	_, _ = io.WriteString(w, payload)
+}
+
 func (s *Server) sessionFromRequest(r *http.Request) (bool, string) {
 	cookies := ParseCookies(r.Header.Get("Cookie"))
 	return s.service.auth.ReadSession(cookies["proxyrelay_session"])
@@ -78,6 +88,30 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := r.Method
 	if pathname == "/api/openapi.json" && method == http.MethodGet {
 		writeJSON(w, 200, BuildOpenAPISpec())
+		return
+	}
+	if pathname == "/api/health" && method == http.MethodGet {
+		writeJSON(w, 200, s.dynamicProxy.GetHealth(r))
+		return
+	}
+	if pathname == "/api/proxy/next" && method == http.MethodGet {
+		result := s.dynamicProxy.GetNextProxy(r)
+		if result.RequestID != "" {
+			w.Header().Set("X-Request-Id", result.RequestID)
+		}
+		if !result.OK {
+			writeJSON(w, result.Status, map[string]any{
+				"code":       result.Code,
+				"message":    firstNonEmpty(result.Message, "internal server error"),
+				"request_id": firstNonEmpty(result.RequestID, "unknown"),
+			})
+			return
+		}
+		if result.Format == "json" {
+			writeJSON(w, result.Status, result.Body)
+			return
+		}
+		writeText(w, result.Status, firstNonEmpty(result.ContentType, "text/plain; charset=utf-8"), fmt.Sprint(result.Body))
 		return
 	}
 
@@ -159,6 +193,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case pathname == "/api/groups" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetGroups())
 			return
+		case pathname == "/api/transit-routes" && method == http.MethodGet:
+			writeJSON(w, 200, s.service.GetTransitRoutes())
+			return
 		case pathname == "/api/landing-proxies" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetLandingProxies())
 			return
@@ -216,6 +253,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			response, status := s.service.AddEgressGroup(payload)
+			writeJSON(w, status, response)
+			return
+		case pathname == "/api/transit-routes" && method == http.MethodPost:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.AddTransitRoute(payload)
 			writeJSON(w, status, response)
 			return
 		case pathname == "/api/landing-proxies" && method == http.MethodPost:
@@ -276,6 +322,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, status, response)
 			return
 		}
+		if strings.HasPrefix(pathname, "/api/transit-routes/") && strings.HasSuffix(pathname, "/healthcheck") && method == http.MethodPost {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/transit-routes/"), "/healthcheck")
+			response, status := s.service.RunTransitRouteHealthcheck(name)
+			writeJSON(w, status, response)
+			return
+		}
 		if strings.HasPrefix(pathname, "/api/subscriptions/") && strings.HasSuffix(pathname, "/toggle") && method == http.MethodPost {
 			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/subscriptions/"), "/toggle")
 			payload, err := readJSONBody(r)
@@ -304,9 +356,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, status, response)
 			return
 		}
+		if strings.HasPrefix(pathname, "/api/transit-routes/") && strings.HasSuffix(pathname, "/update") && method == http.MethodPut {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/transit-routes/"), "/update")
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.UpdateTransitRoute(name, payload)
+			writeJSON(w, status, response)
+			return
+		}
 		if strings.HasPrefix(pathname, "/api/egress-groups/") && method == http.MethodDelete {
 			name := strings.TrimPrefix(pathname, "/api/egress-groups/")
 			response, status := s.service.RemoveEgressGroup(name)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/transit-routes/") && method == http.MethodDelete {
+			name := strings.TrimPrefix(pathname, "/api/transit-routes/")
+			response, status := s.service.RemoveTransitRoute(name)
 			writeJSON(w, status, response)
 			return
 		}

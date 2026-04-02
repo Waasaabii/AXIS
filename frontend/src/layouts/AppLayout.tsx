@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Activity, Link as LinkIcon, Network, Radio, Settings, FileText, LogOut, RefreshCw, Wrench, Menu } from 'lucide-react';
+import { LayoutDashboard, Activity, Link as LinkIcon, Network, Radio, Settings, FileText, LogOut, RefreshCw, Wrench, Menu, GitBranch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import useSWR from 'swr';
 import { api, ApiError, type SessionStatusResponse, type SetupStateResponse } from '@/services/api';
@@ -13,6 +13,7 @@ const navItems = [
   { name: '运行状态', path: '/status', icon: Activity, description: '检查代理核心、目录和运行环境是否准备就绪。' },
   { name: '订阅与节点', path: '/subscriptions', icon: LinkIcon, description: '导入服务商订阅，让可用节点进入 AXIS。' },
   { name: '出口线路', path: '/interfaces', icon: Network, description: '把节点整理成常用线路，方便后续绑定入口。' },
+  { name: '中转线路', path: '/transits', icon: GitBranch, description: '把上游固定节点和本地出口线路拼成一条可复用中转链路。' },
   { name: '本地入口', path: '/listeners', icon: Radio, description: '创建可供浏览器、设备或应用连接的本地代理入口。' },
   { name: '系统与核心', path: '/system', icon: Settings, description: '管理管理员密码、高级配置和 Mihomo 版本。' },
   { name: '操作记录', path: '/events', icon: FileText, description: '查看最近发生了什么，以及哪里可能需要处理。' },

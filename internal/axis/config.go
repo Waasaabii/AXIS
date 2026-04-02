@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -59,6 +60,7 @@ func LoadConfig(configPath string) (*Config, error) {
 		Subscriptions:  parsed.Subscriptions,
 		LandingProxies: parsed.LandingProxies,
 		EgressGroups:   parsed.EgressGroups,
+		TransitRoutes:  parsed.TransitRoutes,
 		Listeners:      parsed.Listeners,
 	}
 
@@ -97,6 +99,15 @@ func LoadConfig(configPath string) (*Config, error) {
 		if config.EgressGroups[index].Mode == "" {
 			config.EgressGroups[index].Mode = "manual"
 		}
+		if config.EgressGroups[index].Mode == "fallback" {
+			config.EgressGroups[index].Proxies = normalizeProxyOrder(config.EgressGroups[index].Proxies)
+			if config.EgressGroups[index].HealthCheckURL == "" {
+				config.EgressGroups[index].HealthCheckURL = "https://www.gstatic.com/generate_204"
+			}
+			if config.EgressGroups[index].Interval == 0 {
+				config.EgressGroups[index].Interval = 60
+			}
+		}
 	}
 
 	for index := range config.LandingProxies {
@@ -107,6 +118,14 @@ func LoadConfig(configPath string) (*Config, error) {
 			config.LandingProxies[index].Enabled = false
 		} else if !config.LandingProxies[index].Enabled {
 			config.LandingProxies[index].Enabled = true
+		}
+	}
+
+	for index := range config.TransitRoutes {
+		if !parsed.TransitRoutes[index].Enabled {
+			config.TransitRoutes[index].Enabled = false
+		} else if !config.TransitRoutes[index].Enabled {
+			config.TransitRoutes[index].Enabled = true
 		}
 	}
 
@@ -127,6 +146,7 @@ func LoadConfig(configPath string) (*Config, error) {
 		} else if !config.Listeners[index].UDP {
 			config.Listeners[index].UDP = true
 		}
+		config.Listeners[index].RouteMode = normalizeListenerRouteMode(config.Listeners[index].RouteMode, config.Listeners[index].TransitRoute)
 	}
 
 	if err := ValidateConfig(config); err != nil {
@@ -149,7 +169,14 @@ func ValidateConfig(config *Config) error {
 		if subscription.Name == "" {
 			return errors.New("subscriptions[].name 不能为空")
 		}
-		if subscription.URL == "" {
+		if isManualProviderType(subscription.Type) {
+			if strings.TrimSpace(subscription.Server) == "" {
+				return fmt.Errorf("单节点 %s 缺少 server", subscription.Name)
+			}
+			if subscription.Port <= 0 {
+				return fmt.Errorf("单节点 %s 缺少 port", subscription.Name)
+			}
+		} else if subscription.URL == "" {
 			return fmt.Errorf("订阅 %s 缺少 url", subscription.Name)
 		}
 		if _, exists := providerNames[subscription.Name]; exists {
@@ -194,6 +221,9 @@ func ValidateConfig(config *Config) error {
 		if _, err := compilePattern(group.ExcludeFilter); err != nil {
 			return err
 		}
+		if group.Mode == "fallback" && len(normalizeProxyOrder(group.Proxies)) == 0 {
+			return fmt.Errorf("顺序容灾组 %s 至少需要选择一个节点", group.Name)
+		}
 		if _, exists := groupNames[group.Name]; exists {
 			return fmt.Errorf("重复的出口线路名称: %s", group.Name)
 		}
@@ -205,6 +235,32 @@ func ValidateConfig(config *Config) error {
 		groupNames[group.Name] = struct{}{}
 	}
 
+	transitRouteNames := map[string]struct{}{}
+	for _, route := range config.TransitRoutes {
+		if route.Name == "" {
+			return errors.New("transit_routes[].name 不能为空")
+		}
+		if strings.TrimSpace(route.UpstreamProvider) == "" {
+			return fmt.Errorf("中转线路 %s 缺少 upstream_provider", route.Name)
+		}
+		if strings.TrimSpace(route.UpstreamProxyName) == "" {
+			return fmt.Errorf("中转线路 %s 缺少 upstream_proxy_name", route.Name)
+		}
+		if strings.TrimSpace(route.EgressGroup) == "" {
+			return fmt.Errorf("中转线路 %s 缺少 egress_group", route.Name)
+		}
+		if _, exists := providerNames[route.UpstreamProvider]; !exists {
+			return fmt.Errorf("中转线路 %s 绑定的来源 %s 不存在", route.Name, route.UpstreamProvider)
+		}
+		if _, exists := groupNames[route.EgressGroup]; !exists {
+			return fmt.Errorf("中转线路 %s 绑定的出口线路 %s 不存在", route.Name, route.EgressGroup)
+		}
+		if _, exists := transitRouteNames[route.Name]; exists {
+			return fmt.Errorf("重复的中转线路名称: %s", route.Name)
+		}
+		transitRouteNames[route.Name] = struct{}{}
+	}
+
 	ports := map[int]struct{}{}
 	for _, listener := range config.Listeners {
 		if listener.Name == "" {
@@ -213,11 +269,21 @@ func ValidateConfig(config *Config) error {
 		if listener.Port <= 0 {
 			return fmt.Errorf("本地入口 %s 缺少 port", listener.Name)
 		}
-		if listener.EgressGroup == "" {
-			return fmt.Errorf("本地入口 %s 缺少 egress_group", listener.Name)
-		}
-		if _, exists := groupNames[listener.EgressGroup]; !exists {
-			return fmt.Errorf("本地入口 %s 绑定的出口线路 %s 不存在", listener.Name, listener.EgressGroup)
+		switch getListenerRouteMode(listener) {
+		case "transit":
+			if strings.TrimSpace(listener.TransitRoute) == "" {
+				return fmt.Errorf("本地入口 %s 缺少 transit_route", listener.Name)
+			}
+			if _, exists := transitRouteNames[listener.TransitRoute]; !exists {
+				return fmt.Errorf("本地入口 %s 绑定的中转线路 %s 不存在", listener.Name, listener.TransitRoute)
+			}
+		default:
+			if listener.EgressGroup == "" {
+				return fmt.Errorf("本地入口 %s 缺少 egress_group", listener.Name)
+			}
+			if _, exists := groupNames[listener.EgressGroup]; !exists {
+				return fmt.Errorf("本地入口 %s 绑定的出口线路 %s 不存在", listener.Name, listener.EgressGroup)
+			}
 		}
 		if _, exists := ports[listener.Port]; exists {
 			return fmt.Errorf("重复的本地入口端口: %d", listener.Port)

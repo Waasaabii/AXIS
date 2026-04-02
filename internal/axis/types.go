@@ -26,7 +26,11 @@ type RuntimeConfig struct {
 type Subscription struct {
 	Name                string            `json:"name" yaml:"name"`
 	Type                string            `json:"type" yaml:"type"`
-	URL                 string            `json:"url" yaml:"url"`
+	URL                 string            `json:"url,omitempty" yaml:"url,omitempty"`
+	Server              string            `json:"server,omitempty" yaml:"server,omitempty"`
+	Port                int               `json:"port,omitempty" yaml:"port,omitempty"`
+	Username            string            `json:"username,omitempty" yaml:"username,omitempty"`
+	Password            string            `json:"password,omitempty" yaml:"password,omitempty"`
 	Interval            int               `json:"interval" yaml:"interval"`
 	Enabled             bool              `json:"enabled" yaml:"enabled"`
 	HealthCheckURL      string            `json:"health_check_url,omitempty" yaml:"health_check_url,omitempty"`
@@ -49,16 +53,26 @@ type LandingProxy struct {
 }
 
 type EgressGroup struct {
-	Name           string `json:"name" yaml:"name"`
-	Provider       string `json:"provider" yaml:"provider"`
-	Mode           string `json:"mode" yaml:"mode"`
-	Filter         string `json:"filter" yaml:"filter"`
-	ExcludeFilter  string `json:"exclude_filter" yaml:"exclude_filter"`
-	LandingProxy   string `json:"landing_proxy,omitempty" yaml:"landing_proxy,omitempty"`
-	Strategy       string `json:"strategy,omitempty" yaml:"strategy,omitempty"`
-	HealthCheckURL string `json:"health_check_url,omitempty" yaml:"health_check_url,omitempty"`
-	Interval       int    `json:"interval,omitempty" yaml:"interval,omitempty"`
-	Fallback       string `json:"fallback,omitempty" yaml:"fallback,omitempty"`
+	Name           string   `json:"name" yaml:"name"`
+	Provider       string   `json:"provider" yaml:"provider"`
+	Mode           string   `json:"mode" yaml:"mode"`
+	Filter         string   `json:"filter" yaml:"filter"`
+	ExcludeFilter  string   `json:"exclude_filter" yaml:"exclude_filter"`
+	Proxies        []string `json:"proxies,omitempty" yaml:"proxies,omitempty"`
+	LandingProxy   string   `json:"landing_proxy,omitempty" yaml:"landing_proxy,omitempty"`
+	Strategy       string   `json:"strategy,omitempty" yaml:"strategy,omitempty"`
+	HealthCheckURL string   `json:"health_check_url,omitempty" yaml:"health_check_url,omitempty"`
+	Interval       int      `json:"interval,omitempty" yaml:"interval,omitempty"`
+	Fallback       string   `json:"fallback,omitempty" yaml:"fallback,omitempty"`
+}
+
+type TransitRoute struct {
+	Name              string `json:"name" yaml:"name"`
+	Enabled           bool   `json:"enabled" yaml:"enabled"`
+	UpstreamProvider  string `json:"upstream_provider" yaml:"upstream_provider"`
+	UpstreamProxyName string `json:"upstream_proxy_name" yaml:"upstream_proxy_name"`
+	EgressGroup       string `json:"egress_group" yaml:"egress_group"`
+	Notes             string `json:"notes,omitempty" yaml:"notes,omitempty"`
 }
 
 type ListenerUser struct {
@@ -67,14 +81,16 @@ type ListenerUser struct {
 }
 
 type Listener struct {
-	Name        string         `json:"name" yaml:"name"`
-	Type        string         `json:"type" yaml:"type"`
-	Listen      string         `json:"listen" yaml:"listen"`
-	Port        int            `json:"port" yaml:"port"`
-	UDP         bool           `json:"udp" yaml:"udp"`
-	Enabled     bool           `json:"enabled" yaml:"enabled"`
-	Users       []ListenerUser `json:"users" yaml:"users"`
-	EgressGroup string         `json:"egress_group" yaml:"egress_group"`
+	Name         string         `json:"name" yaml:"name"`
+	Type         string         `json:"type" yaml:"type"`
+	Listen       string         `json:"listen" yaml:"listen"`
+	Port         int            `json:"port" yaml:"port"`
+	UDP          bool           `json:"udp" yaml:"udp"`
+	Enabled      bool           `json:"enabled" yaml:"enabled"`
+	Users        []ListenerUser `json:"users" yaml:"users"`
+	RouteMode    string         `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
+	EgressGroup  string         `json:"egress_group,omitempty" yaml:"egress_group,omitempty"`
+	TransitRoute string         `json:"transit_route,omitempty" yaml:"transit_route,omitempty"`
 }
 
 type Config struct {
@@ -84,6 +100,7 @@ type Config struct {
 	Subscriptions  []Subscription `json:"subscriptions" yaml:"subscriptions"`
 	LandingProxies []LandingProxy `json:"landing_proxies" yaml:"landing_proxies"`
 	EgressGroups   []EgressGroup  `json:"egress_groups" yaml:"egress_groups"`
+	TransitRoutes  []TransitRoute `json:"transit_routes,omitempty" yaml:"transit_routes,omitempty"`
 	Listeners      []Listener     `json:"listeners" yaml:"listeners"`
 }
 
@@ -143,6 +160,14 @@ type GroupState struct {
 	LastHealthcheckAt string `json:"lastHealthcheckAt,omitempty"`
 }
 
+type TransitRouteState struct {
+	LastTestedAt    string `json:"lastTestedAt,omitempty"`
+	LastTestStatus  string `json:"lastTestStatus,omitempty"`
+	LastTestMessage string `json:"lastTestMessage,omitempty"`
+	LastTestDelay   int    `json:"lastTestDelay,omitempty"`
+	LastTestURL     string `json:"lastTestUrl,omitempty"`
+}
+
 type EventEntry struct {
 	ID      string `json:"id"`
 	Level   string `json:"level"`
@@ -152,13 +177,14 @@ type EventEntry struct {
 }
 
 type AppState struct {
-	StartedAt       string                    `json:"startedAt"`
-	Runtime         RuntimeState              `json:"runtime"`
-	Controller      *ControllerState          `json:"controller,omitempty"`
-	Providers       map[string]ProviderRecord `json:"providers"`
-	GroupSelections map[string]string         `json:"groupSelections"`
-	Groups          map[string]GroupState     `json:"groups,omitempty"`
-	Events          []EventEntry              `json:"events"`
+	StartedAt       string                       `json:"startedAt"`
+	Runtime         RuntimeState                 `json:"runtime"`
+	Controller      *ControllerState             `json:"controller,omitempty"`
+	Providers       map[string]ProviderRecord    `json:"providers"`
+	GroupSelections map[string]string            `json:"groupSelections"`
+	Groups          map[string]GroupState        `json:"groups,omitempty"`
+	TransitRoutes   map[string]TransitRouteState `json:"transitRoutes,omitempty"`
+	Events          []EventEntry                 `json:"events"`
 }
 
 type GroupCandidate struct {
@@ -171,40 +197,79 @@ type GroupCandidate struct {
 }
 
 type GroupView struct {
-	Name              string           `json:"name"`
-	Mode              string           `json:"mode"`
-	Provider          string           `json:"provider"`
-	Filter            string           `json:"filter"`
-	CandidateCount    int              `json:"candidateCount"`
-	Current           string           `json:"current,omitempty"`
-	CurrentValue      string           `json:"currentValue,omitempty"`
-	Candidates        []GroupCandidate `json:"candidates"`
-	LastHealthcheckAt string           `json:"lastHealthcheckAt,omitempty"`
-	LandingProxy      string           `json:"landingProxy,omitempty"`
-	RouteSummary      string           `json:"routeSummary,omitempty"`
-	ProviderMissing   bool             `json:"providerMissing"`
-	ProviderDisabled  bool             `json:"providerDisabled"`
-	LandingMissing    bool             `json:"landingMissing"`
-	LandingDisabled   bool             `json:"landingDisabled"`
+	Name                string           `json:"name"`
+	Mode                string           `json:"mode"`
+	Provider            string           `json:"provider"`
+	Filter              string           `json:"filter"`
+	ExcludeFilter       string           `json:"excludeFilter,omitempty"`
+	CandidateCount      int              `json:"candidateCount"`
+	Current             string           `json:"current,omitempty"`
+	CurrentValue        string           `json:"currentValue,omitempty"`
+	Candidates          []GroupCandidate `json:"candidates"`
+	ProxyOrder          []string         `json:"proxyOrder,omitempty"`
+	LastHealthcheckAt   string           `json:"lastHealthcheckAt,omitempty"`
+	LandingProxy        string           `json:"landingProxy,omitempty"`
+	HealthCheckURL      string           `json:"healthCheckURL,omitempty"`
+	HealthCheckInterval int              `json:"healthCheckInterval,omitempty"`
+	RouteSummary        string           `json:"routeSummary,omitempty"`
+	ProviderMissing     bool             `json:"providerMissing"`
+	ProviderDisabled    bool             `json:"providerDisabled"`
+	LandingMissing      bool             `json:"landingMissing"`
+	LandingDisabled     bool             `json:"landingDisabled"`
 }
 
 type ListenerView struct {
-	Name             string         `json:"name"`
-	Type             string         `json:"type"`
-	Listen           string         `json:"listen"`
-	Port             int            `json:"port"`
-	UDP              bool           `json:"udp"`
-	Users            []ListenerUser `json:"users"`
-	UserCount        int            `json:"userCount"`
-	EgressGroup      string         `json:"egressGroup"`
-	CurrentProxy     string         `json:"currentProxy,omitempty"`
-	RouteSummary     string         `json:"routeSummary,omitempty"`
-	Status           string         `json:"status"`
-	GroupMissing     bool           `json:"groupMissing"`
-	ProviderMissing  bool           `json:"providerMissing"`
-	ProviderDisabled bool           `json:"providerDisabled"`
-	LandingMissing   bool           `json:"landingMissing"`
-	LandingDisabled  bool           `json:"landingDisabled"`
+	Name                string         `json:"name"`
+	Type                string         `json:"type"`
+	Listen              string         `json:"listen"`
+	Port                int            `json:"port"`
+	UDP                 bool           `json:"udp"`
+	Enabled             bool           `json:"enabled"`
+	Users               []ListenerUser `json:"users"`
+	UserCount           int            `json:"userCount"`
+	RouteMode           string         `json:"routeMode"`
+	EgressGroup         string         `json:"egressGroup"`
+	TransitRoute        string         `json:"transitRoute,omitempty"`
+	TargetName          string         `json:"targetName,omitempty"`
+	CurrentProxy        string         `json:"currentProxy,omitempty"`
+	RouteSummary        string         `json:"routeSummary,omitempty"`
+	Status              string         `json:"status"`
+	GroupMissing        bool           `json:"groupMissing"`
+	ProviderMissing     bool           `json:"providerMissing"`
+	ProviderDisabled    bool           `json:"providerDisabled"`
+	LandingMissing      bool           `json:"landingMissing"`
+	LandingDisabled     bool           `json:"landingDisabled"`
+	TransitMissing      bool           `json:"transitMissing"`
+	TransitDisabled     bool           `json:"transitDisabled"`
+	TransitProxyMissing bool           `json:"transitProxyMissing"`
+}
+
+type TransitRouteView struct {
+	Name                   string `json:"name"`
+	Enabled                bool   `json:"enabled"`
+	UpstreamProvider       string `json:"upstreamProvider"`
+	UpstreamProxyName      string `json:"upstreamProxyName"`
+	EgressGroup            string `json:"egressGroup"`
+	Notes                  string `json:"notes,omitempty"`
+	CurrentProxy           string `json:"currentProxy,omitempty"`
+	CandidateCount         int    `json:"candidateCount"`
+	EgressGroupMode        string `json:"egressGroupMode,omitempty"`
+	RuntimeGroupName       string `json:"runtimeGroupName,omitempty"`
+	RouteSummary           string `json:"routeSummary,omitempty"`
+	LastTestedAt           string `json:"lastTestedAt,omitempty"`
+	LastTestStatus         string `json:"lastTestStatus,omitempty"`
+	LastTestMessage        string `json:"lastTestMessage,omitempty"`
+	LastTestDelay          int    `json:"lastTestDelay,omitempty"`
+	LastTestURL            string `json:"lastTestUrl,omitempty"`
+	Status                 string `json:"status"`
+	ProviderMissing        bool   `json:"providerMissing"`
+	ProviderDisabled       bool   `json:"providerDisabled"`
+	TransitProxyMissing    bool   `json:"transitProxyMissing"`
+	EgressGroupMissing     bool   `json:"egressGroupMissing"`
+	EgressProviderMissing  bool   `json:"egressProviderMissing"`
+	EgressProviderDisabled bool   `json:"egressProviderDisabled"`
+	LandingMissing         bool   `json:"landingMissing"`
+	LandingDisabled        bool   `json:"landingDisabled"`
 }
 
 type LandingProxyView struct {
