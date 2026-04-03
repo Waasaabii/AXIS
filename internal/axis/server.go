@@ -4,21 +4,43 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
+	"net/http/httputil"
+	neturl "net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+
+	frontendassets "github.com/Waasaabii/AXIS/frontend"
 )
 
 type Server struct {
 	service      *Service
+	engine       *EngineFacade
+	host         *HostFacade
 	dynamicProxy *DynamicProxyService
+	uiDevProxy   *httputil.ReverseProxy
+	staticFS     fs.FS
 	publicDir    string
 }
 
 func NewServer(service *Service) *Server {
 	publicDir := resolvePublicDir(service)
-	return &Server{service: service, dynamicProxy: NewDynamicProxyService(service), publicDir: publicDir}
+	staticFS, _, err := frontendassets.StaticFS()
+	if err != nil {
+		staticFS = nil
+	}
+	return &Server{
+		service:      service,
+		engine:       NewEngineFacade(service),
+		host:         NewHostFacade(service),
+		dynamicProxy: NewDynamicProxyService(service),
+		uiDevProxy:   newUIDevProxy(os.Getenv("AXIS_UI_DEV_URL")),
+		staticFS:     staticFS,
+		publicDir:    publicDir,
+	}
 }
 
 func resolvePublicDir(service *Service) string {
@@ -50,6 +72,51 @@ func resolvePublicDir(service *Service) string {
 	return filepath.Join("frontend", "dist")
 }
 
+func newUIDevProxy(rawURL string) *httputil.ReverseProxy {
+	value := strings.TrimSpace(rawURL)
+	if value == "" {
+		return nil
+	}
+	target, err := neturl.Parse(value)
+	if err != nil || target.Scheme == "" || target.Host == "" {
+		return nil
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	originalDirector := proxy.Director
+	proxy.Director = func(r *http.Request) {
+		originalDirector(r)
+		r.Host = target.Host
+	}
+	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, proxyErr error) {
+		http.Error(w, fmt.Sprintf("前端开发服务器不可用: %v", proxyErr), http.StatusBadGateway)
+	}
+	return proxy
+}
+
+func normalizeStaticTarget(urlPath string) string {
+	target := strings.TrimPrefix(path.Clean("/"+urlPath), "/")
+	if target == "" || target == "." {
+		return "index.html"
+	}
+	return target
+}
+
+func cloneRequestWithPath(r *http.Request, pathname string) *http.Request {
+	clone := r.Clone(r.Context())
+	if r.URL != nil {
+		urlCopy := *r.URL
+		clone.URL = &urlCopy
+		clone.URL.Path = pathname
+	}
+	clone.RequestURI = pathname
+	return clone
+}
+
+func staticPathExists(root fs.FS, target string) bool {
+	info, err := fs.Stat(root, target)
+	return err == nil && !info.IsDir()
+}
+
 func readJSONBody(r *http.Request) (map[string]any, error) {
 	defer r.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1024*1024))
@@ -79,6 +146,9 @@ func writeText(w http.ResponseWriter, status int, contentType, payload string) {
 }
 
 func (s *Server) sessionFromRequest(r *http.Request) (bool, string) {
+	if s == nil || s.service == nil || s.service.auth == nil {
+		return false, ""
+	}
 	cookies := ParseCookies(r.Header.Get("Cookie"))
 	return s.service.auth.ReadSession(cookies["proxyrelay_session"])
 }
@@ -116,6 +186,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	validSession, username := s.sessionFromRequest(r)
+	if pathname == "/api/bootstrap/status" && method == http.MethodGet {
+		writeJSON(w, 200, s.service.GetBootstrapStatus(validSession, username))
+		return
+	}
 	if pathname == "/api/session" && method == http.MethodGet {
 		writeJSON(w, 200, s.service.SessionStatus(validSession, username))
 		return
@@ -124,6 +198,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		payload, err := readJSONBody(r)
 		if err != nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		if s.service.GetSetupState().NeedsPasswordReset {
+			writeJSON(w, 409, map[string]any{"ok": false, "error": "首次初始化还没完成，请先创建管理员账号和密码"})
 			return
 		}
 		response, status := s.service.Login(stringValue(payload["username"]), stringValue(payload["password"]))
@@ -155,6 +233,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, status, response)
 		return
 	}
+	if pathname == "/api/setup-state" && method == http.MethodGet {
+		writeJSON(w, 200, s.service.GetSetupState())
+		return
+	}
+	if pathname == "/api/setup/admin" && method == http.MethodPut {
+		payload, err := readJSONBody(r)
+		if err != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		response, status := s.service.BootstrapAdmin(stringValue(payload["username"]), stringValue(payload["password"]))
+		writeJSON(w, status, response)
+		return
+	}
 
 	if strings.HasPrefix(pathname, "/api/") {
 		if !validSession {
@@ -165,6 +257,51 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case pathname == "/api/status" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetStatus())
+			return
+		case pathname == "/api/host/status" && method == http.MethodGet:
+			status, err := s.host.GetStatus()
+			if err != nil {
+				writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			writeJSON(w, 200, status)
+			return
+		case pathname == "/api/host/updater" && method == http.MethodGet:
+			status, err := s.host.GetUpdaterStatus()
+			if err != nil {
+				writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			writeJSON(w, 200, status)
+			return
+		case pathname == "/api/host/updater/check" && method == http.MethodPost:
+			response, err := s.host.CheckForUpdates()
+			if err != nil {
+				writeJSON(w, 400, response)
+				return
+			}
+			writeJSON(w, 200, response)
+			return
+		case pathname == "/api/host/open-browser" && method == http.MethodPost:
+			response, err := s.host.OpenControlCenter(firstNonEmpty(stringValue(r.URL.Query().Get("url")), ""))
+			if err != nil {
+				writeJSON(w, 400, response)
+				return
+			}
+			writeJSON(w, 200, response)
+			return
+		case pathname == "/api/host/autostart" && method == http.MethodPut:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, setErr := s.host.SetAutostart(boolValue(payload["enabled"], false))
+			if setErr != nil {
+				writeJSON(w, 400, response)
+				return
+			}
+			writeJSON(w, 200, response)
 			return
 		case pathname == "/api/config" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetConfig())
@@ -224,9 +361,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		case pathname == "/api/controller" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetControllerStatus())
-			return
-		case pathname == "/api/setup-state" && method == http.MethodGet:
-			writeJSON(w, 200, s.service.GetSetupState())
 			return
 		case pathname == "/api/runtime-preflight" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetRuntimePreflight())
@@ -440,15 +574,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
-	if stat, err := os.Stat(s.publicDir); err != nil || !stat.IsDir() {
-		http.Error(w, "frontend dist 不存在，请先执行 pnpm build:ui", http.StatusServiceUnavailable)
+	if s.uiDevProxy != nil {
+		s.uiDevProxy.ServeHTTP(w, r)
 		return
 	}
 
-	target := strings.TrimPrefix(r.URL.Path, "/")
-	if target == "" {
-		target = "index.html"
+	target := normalizeStaticTarget(r.URL.Path)
+	if s.staticFS != nil {
+		fileServer := http.FileServerFS(s.staticFS)
+		if staticPathExists(s.staticFS, target) {
+			servePath := "/" + target
+			if target == "index.html" {
+				servePath = "/"
+			}
+			fileServer.ServeHTTP(w, cloneRequestWithPath(r, servePath))
+			return
+		}
+		if staticPathExists(s.staticFS, "index.html") {
+			fileServer.ServeHTTP(w, cloneRequestWithPath(r, "/"))
+			return
+		}
 	}
+
+	if stat, err := os.Stat(s.publicDir); err != nil || !stat.IsDir() {
+		http.Error(w, "前端资源不可用，请先执行 pnpm build:ui 或启动 pnpm dev", http.StatusServiceUnavailable)
+		return
+	}
+
 	filePath := filepath.Join(s.publicDir, target)
 	if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
 		http.ServeFile(w, r, filePath)

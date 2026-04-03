@@ -53,3 +53,17 @@ func TestBuildSetupStateReadyWhenCoreDataExists(t *testing.T) {
 		t.Fatal("完整核心数据应全部就绪")
 	}
 }
+
+func TestBuildSetupStateIncludesAdminUsername(t *testing.T) {
+	config := &Config{
+		Admin: AdminConfig{
+			Username:              "axis-admin",
+			RequiresPasswordReset: true,
+		},
+	}
+
+	state := BuildSetupState(config)
+	if state.AdminUsername != "axis-admin" {
+		t.Fatalf("expected admin username to be exposed, got %q", state.AdminUsername)
+	}
+}

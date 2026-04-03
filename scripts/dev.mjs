@@ -5,14 +5,17 @@ import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
+import { resolveDevConfigPath, resolveDevHome, resolveDevRuntimeDir } from "./axis-paths.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
-const runtimeDir = path.join(repoRoot, "runtime", "dev");
-const localConfigPath = path.join(runtimeDir, "proxyrelay.dev.yaml");
+const axisHome = resolveDevHome();
+const runtimeDir = resolveDevRuntimeDir();
+const localConfigPath = resolveDevConfigPath();
 
 const args = new Set(process.argv.slice(2));
-const managedMode = args.has("--managed");
+const renderOnlyMode = args.has("--render-only");
+const managedMode = !renderOnlyMode;
 
 const serverHost = process.env.AXIS_SERVER_HOST || "127.0.0.1";
 const serverPort = Number(process.env.AXIS_SERVER_PORT || 8787);
@@ -157,6 +160,7 @@ async function shutdown(reason, code = 0) {
 
 async function readSourceConfig() {
   const candidates = [
+    localConfigPath,
     path.join(repoRoot, "config", "proxyrelay.yaml"),
     path.join(repoRoot, "config", "proxyrelay.example.yaml"),
   ];
@@ -181,13 +185,14 @@ async function writeDevConfig() {
   };
   config.runtime = {
     ...(config.runtime || {}),
-    workdir: runtimeDir,
+    workdir: "../runtime",
     render_only: !managedMode,
     mihomo_binary: mihomoBinary,
     external_controller: `http://${controllerHost}:${controllerPort}`,
     external_secret: controllerSecret,
   };
 
+  await mkdir(path.dirname(localConfigPath), { recursive: true });
   await mkdir(runtimeDir, { recursive: true });
   await writeFile(localConfigPath, YAML.stringify(config), "utf8");
 
@@ -200,6 +205,7 @@ async function runPreflight() {
       cwd: repoRoot,
       env: {
         ...process.env,
+        AXIS_HOME: axisHome,
         PROXYRELAY_CONFIG: localConfigPath,
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -262,7 +268,9 @@ async function main() {
   }
 
   const backendEnv = {
+    AXIS_HOME: axisHome,
     PROXYRELAY_CONFIG: localConfigPath,
+    AXIS_UI_DEV_URL: `http://${uiHost}:${uiPort}`,
   };
   const frontendEnv = {
     AXIS_SERVER_HOST: serverHost,
@@ -276,10 +284,11 @@ async function main() {
 
   log(`React 开发服务器: http://${uiHost}:${uiPort}`);
   log(`AXIS API 地址: http://${serverHost}:${serverPort}`);
+  log(`AXIS 控制台入口: http://${serverHost}:${serverPort}`);
   if (managedMode) {
     log(`Mihomo Controller: http://${controllerHost}:${controllerPort}`);
   } else {
-    log("当前为 render-only 开发模式，如需联动 Mihomo 请使用 pnpm dev:managed");
+    log("当前为仅渲染配置模式，如需启用完整运行时能力请直接使用 pnpm dev");
   }
 }
 

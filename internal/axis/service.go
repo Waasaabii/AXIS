@@ -1,6 +1,7 @@
 package axis
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,23 +9,28 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 )
 
-const defaultConfigPath = "config/proxyrelay.yaml"
-
 type Service struct {
-	configPath string
-	config     *Config
-	layout     *RuntimeLayout
-	state      *AppState
-	store      *Store
-	auth       *AuthContext
-	controller *MihomoControllerAdapter
+	configPath  string
+	config      *Config
+	layout      *RuntimeLayout
+	state       *AppState
+	store       *Store
+	auth        *AuthContext
+	controller  *MihomoControllerAdapter
+	host        HostIntegration
+	configMTime time.Time
 }
 
 func NewService(configPath string) (*Service, error) {
 	if configPath == "" {
-		configPath = defaultConfigPath
+		resolvedPath, err := EnsureConfigPath("")
+		if err != nil {
+			return nil, err
+		}
+		configPath = resolvedPath
 	}
 	service := &Service{configPath: configPath}
 	if err := service.LoadAll(); err != nil {
@@ -41,6 +47,7 @@ func createEmptyState() *AppState {
 		GroupSelections: map[string]string{},
 		Groups:          map[string]GroupState{},
 		TransitRoutes:   map[string]TransitRouteState{},
+		Host:            HostState{},
 		Events:          []EventEntry{},
 	}
 }
@@ -66,6 +73,7 @@ func (s *Service) LoadAll() error {
 	s.layout = layout
 	s.auth = NewAuthContext(config.Admin.Username, config.Admin.PasswordHash, config.Admin.Password, config.Admin.SessionSecret, config.Admin.SessionTTLHours)
 	s.controller = NewMihomoControllerAdapter(config.Runtime)
+	s.host = NewNoopHostIntegration()
 
 	if err := s.loadState(); err != nil {
 		return err
@@ -75,6 +83,9 @@ func (s *Service) LoadAll() error {
 		return err
 	}
 	s.detectController(false)
+	if err := s.captureConfigModTime(); err != nil {
+		return err
+	}
 	return s.persistState()
 }
 
@@ -84,19 +95,7 @@ func (s *Service) loadState() error {
 		return err
 	}
 	if state != nil {
-		s.state = state
-		if s.state.Providers == nil {
-			s.state.Providers = map[string]ProviderRecord{}
-		}
-		if s.state.GroupSelections == nil {
-			s.state.GroupSelections = map[string]string{}
-		}
-		if s.state.Groups == nil {
-			s.state.Groups = map[string]GroupState{}
-		}
-		if s.state.TransitRoutes == nil {
-			s.state.TransitRoutes = map[string]TransitRouteState{}
-		}
+		s.state = normalizeState(state)
 		s.state.Events, _ = s.store.ListEvents(100)
 		return nil
 	}
@@ -106,26 +105,14 @@ func (s *Service) loadState() error {
 		if err == nil {
 			var loaded AppState
 			if json.Unmarshal(raw, &loaded) == nil {
-				s.state = &loaded
-				if s.state.Providers == nil {
-					s.state.Providers = map[string]ProviderRecord{}
-				}
-				if s.state.GroupSelections == nil {
-					s.state.GroupSelections = map[string]string{}
-				}
-				if s.state.Groups == nil {
-					s.state.Groups = map[string]GroupState{}
-				}
-				if s.state.TransitRoutes == nil {
-					s.state.TransitRoutes = map[string]TransitRouteState{}
-				}
+				s.state = normalizeState(&loaded)
 				s.state.Events, _ = s.store.ListEvents(100)
 				return nil
 			}
 		}
 	}
 
-	s.state = createEmptyState()
+	s.state = normalizeState(createEmptyState())
 	return nil
 }
 
@@ -230,6 +217,9 @@ func (s *Service) writeManualProviderFiles() error {
 }
 
 func (s *Service) Login(username, password string) (map[string]any, int) {
+	if s.config.Admin.RequiresPasswordReset {
+		return map[string]any{"ok": false, "error": "首次初始化还没完成，请先创建管理员账号和密码"}, 409
+	}
 	if !s.auth.VerifyCredentials(username, password) {
 		s.pushEvent("warn", "auth", fmt.Sprintf("登录失败: %s", firstNonEmpty(username, "unknown")))
 		_ = s.persistState()
@@ -335,6 +325,7 @@ func BuildSetupState(config *Config) SetupState {
 	return SetupState{
 		Required:             len(reasons) > 0,
 		NeedsPasswordReset:   config.Admin.RequiresPasswordReset,
+		AdminUsername:        config.Admin.Username,
 		HasSubscriptions:     hasSubscriptions,
 		HasRealSubscriptions: hasRealSubscriptions,
 		HasEgressGroups:      hasEgressGroups,
@@ -364,6 +355,36 @@ func (s *Service) UpdatePassword(password string) (map[string]any, int) {
 	}
 	if err := s.LoadAll(); err != nil {
 		return map[string]any{"ok": false, "error": "修改密码失败: " + err.Error()}, 500
+	}
+	return map[string]any{"ok": true}, 200
+}
+
+func (s *Service) BootstrapAdmin(username, password string) (map[string]any, int) {
+	username = strings.TrimSpace(username)
+	if !s.config.Admin.RequiresPasswordReset {
+		return map[string]any{"ok": false, "error": "当前不是首次初始化状态，无需再创建管理员账号"}, 409
+	}
+	if username == "" {
+		return map[string]any{"ok": false, "error": "管理员账号不能为空"}, 400
+	}
+	if password == "" {
+		return map[string]any{"ok": false, "error": "管理员密码不能为空"}, 400
+	}
+
+	hash, err := CreatePasswordHash(password)
+	if err != nil {
+		return map[string]any{"ok": false, "error": "创建管理员账号失败: " + err.Error()}, 500
+	}
+
+	s.config.Admin.Username = username
+	s.config.Admin.PasswordHash = hash
+	s.config.Admin.Password = ""
+	s.config.Admin.RequiresPasswordReset = false
+	if _, err := WriteConfig(s.configPath, s.config); err != nil {
+		return map[string]any{"ok": false, "error": "创建管理员账号失败: " + err.Error()}, 500
+	}
+	if err := s.LoadAll(); err != nil {
+		return map[string]any{"ok": false, "error": "创建管理员账号失败: " + err.Error()}, 500
 	}
 	return map[string]any{"ok": true}, 200
 }
@@ -1265,6 +1286,10 @@ func decodeIntoConfig(payload map[string]any) (*Config, error) {
 		return nil, err
 	}
 	return &config, nil
+}
+
+func DecodeConfigPayload(payload map[string]any) (*Config, error) {
+	return decodeIntoConfig(payload)
 }
 
 func (s *Service) AddSubscription(payload map[string]any) (map[string]any, int) {
@@ -2207,4 +2232,40 @@ func (s *Service) Close() error {
 
 func (s *Service) Config() *Config {
 	return s.config
+}
+
+func (s *Service) RefreshIfConfigChanged() (bool, error) {
+	if s == nil || strings.TrimSpace(s.configPath) == "" {
+		return false, nil
+	}
+	stat, err := os.Stat(s.configPath)
+	if err != nil {
+		return false, err
+	}
+	if !stat.ModTime().Equal(s.configMTime) {
+		return true, s.LoadAll()
+	}
+	return false, nil
+}
+
+func (s *Service) AuthFingerprint() string {
+	if s == nil || s.config == nil || s.auth == nil {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		s.config.Admin.Username,
+		s.config.Admin.PasswordHash,
+		s.config.Admin.Password,
+		s.auth.secret,
+	}, "|")))
+	return fmt.Sprintf("%x", sum[:])
+}
+
+func (s *Service) captureConfigModTime() error {
+	stat, err := os.Stat(s.configPath)
+	if err != nil {
+		return err
+	}
+	s.configMTime = stat.ModTime()
+	return nil
 }

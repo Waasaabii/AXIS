@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "AXIS",
+  "outputfilename": "axis-desktop",
+  "frontend:dir": "../frontend",
+  "frontend:install": "pnpm install",
+  "frontend:build": "pnpm --filter @axis/frontend build",
+  "frontend:dev:watcher": "pnpm --filter @axis/frontend dev",
+  "frontend:dev:serverUrl": "http://127.0.0.1:5173",
+  "author": {
+    "name": "AXIS"
+  }
+}

@@ -19,11 +19,11 @@ import (
 const hashPrefix = "scrypt"
 
 type AuthContext struct {
-	username   string
-	password   string
+	username     string
+	password     string
 	passwordHash string
-	secret     string
-	ttl        time.Duration
+	secret       string
+	ttl          time.Duration
 }
 
 type sessionPayload struct {
@@ -113,11 +113,11 @@ func NewAuthContext(username, passwordHash, password, sessionSecret string, sess
 	}
 
 	return &AuthContext{
-		username: username,
+		username:     username,
 		passwordHash: passwordHash,
-		password: password,
-		secret: secret,
-		ttl: ttl,
+		password:     password,
+		secret:       secret,
+		ttl:          ttl,
 	}
 }
 

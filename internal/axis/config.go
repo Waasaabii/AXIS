@@ -23,6 +23,13 @@ func ResolveDefaultRuntimeWorkdir(configPath string) string {
 	return defaultLocalRuntimeWorkdir
 }
 
+func ResolveRuntimeDir(configPath, workdir string) string {
+	if filepath.IsAbs(workdir) {
+		return filepath.Clean(workdir)
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(configPath), workdir))
+}
+
 func LoadConfig(configPath string) (*Config, error) {
 	raw, err := os.ReadFile(configPath)
 	if err != nil {
@@ -346,7 +353,7 @@ func WriteConfig(configPath string, config *Config) (*Config, error) {
 
 func EnsureRuntimeLayout(config *Config, configPath string) (*RuntimeLayout, error) {
 	rootDir := filepath.Dir(configPath)
-	runtimeDir := filepath.Clean(filepath.Join(rootDir, config.Runtime.Workdir))
+	runtimeDir := ResolveRuntimeDir(configPath, config.Runtime.Workdir)
 	providersDir := filepath.Join(runtimeDir, "providers")
 	versionsDir := filepath.Join(runtimeDir, "mihomo", "versions")
 	if err := os.MkdirAll(providersDir, 0o755); err != nil {

@@ -4,6 +4,42 @@
  */
 
 export interface paths {
+    "/api/bootstrap/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询启动入口状态 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 启动入口状态 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BootstrapStatus"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/config": {
         parameters: {
             query?: never;
@@ -667,6 +703,265 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/host/autostart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 设置宿主开机自启 */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["HostAutostartRequest"];
+                };
+            };
+            responses: {
+                /** @description 设置结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SimpleOkResponse"];
+                    };
+                };
+                /** @description 当前模式不支持 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/host/open-browser": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 打开宿主控制台 */
+        post: {
+            parameters: {
+                query?: {
+                    /** @description 可选目标地址 */
+                    url?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 已触发打开动作 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SimpleOkResponse"];
+                    };
+                };
+                /** @description 当前模式不支持 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/host/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询宿主状态 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 宿主状态 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["HostStatus"];
+                    };
+                };
+                /** @description 未登录 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/host/updater": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询桌面更新服务状态 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 更新服务状态 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UpdaterStatus"];
+                    };
+                };
+                /** @description 未登录 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/host/updater/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 触发桌面更新检查 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 检查已触发 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SimpleOkResponse"];
+                    };
+                };
+                /** @description 当前模式不支持 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -1891,6 +2186,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description 首次初始化未完成 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         /** 退出登录 */
@@ -2012,8 +2316,67 @@ export interface paths {
                         "application/json": components["schemas"]["SetupState"];
                     };
                 };
-                /** @description 未登录 */
-                401: {
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 首次初始化管理员账号 */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BootstrapAdminRequest"];
+                };
+            };
+            responses: {
+                /** @description 管理员账号已创建 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SimpleOkResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 当前不处于首次初始化状态 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 服务端错误 */
+                500: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2023,7 +2386,6 @@ export interface paths {
                 };
             };
         };
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2699,6 +3061,24 @@ export interface components {
             session_ttl_hours: number;
             username: string;
         };
+        BootstrapAdminRequest: {
+            password: string;
+            username: string;
+        };
+        BootstrapAuthStatus: {
+            authenticated: boolean;
+            requiresPasswordReset: boolean;
+            username?: string;
+        };
+        BootstrapStatus: {
+            auth: components["schemas"]["BootstrapAuthStatus"];
+            blockingReason?: string;
+            host: components["schemas"]["HostStatus"];
+            mainService: components["schemas"]["MainServiceStatus"];
+            nextStep: string;
+            setup: components["schemas"]["SetupState"];
+            updater: components["schemas"]["UpdaterStatus"];
+        };
         Config: {
             admin: components["schemas"]["AdminConfig"];
             egress_groups: components["schemas"]["EgressGroup"][];
@@ -2824,6 +3204,19 @@ export interface components {
             proxyOrder?: string[];
             routeSummary?: string;
         };
+        HostAutostartRequest: {
+            enabled: boolean;
+        };
+        HostStatus: {
+            autostartEnabled: boolean;
+            autostartManaged: boolean;
+            configPath?: string;
+            desktopMode: boolean;
+            listenAddress?: string;
+            logs?: string[];
+            mode: string;
+            runtimeDir?: string;
+        };
         LandingProxy: {
             enabled: boolean;
             name: string;
@@ -2900,6 +3293,15 @@ export interface components {
             requiresPasswordReset: boolean;
             setupRequired: boolean;
             user: components["schemas"]["UserIdentity"];
+        };
+        MainServiceStatus: {
+            blockingReason?: string;
+            configPath?: string;
+            controller?: string;
+            message: string;
+            mode: string;
+            ready: boolean;
+            state: string;
         };
         MihomoVersionActionResponse: {
             error?: string;
@@ -3093,6 +3495,7 @@ export interface components {
             title: string;
         };
         SetupState: {
+            adminUsername: string;
             checks: components["schemas"]["SetupCheck"][];
             hasEgressGroups: boolean;
             hasListeners: boolean;
@@ -3226,6 +3629,20 @@ export interface components {
             notes?: string;
             upstream_provider?: string;
             upstream_proxy_name?: string;
+        };
+        UpdaterStatus: {
+            assetName?: string;
+            assetUrl?: string;
+            canAutoApply: boolean;
+            checkedAt?: string;
+            currentVersion?: string;
+            latestVersion?: string;
+            message?: string;
+            mode: string;
+            releaseUrl?: string;
+            running: boolean;
+            state: string;
+            updateAvailable: boolean;
         };
         UserIdentity: {
             username: string;

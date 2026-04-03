@@ -176,6 +176,12 @@ type EventEntry struct {
 	At      string `json:"at"`
 }
 
+type HostState struct {
+	AutostartEnabled bool   `json:"autostartEnabled"`
+	DesktopMode      bool   `json:"desktopMode"`
+	LastOpenedAt     string `json:"lastOpenedAt,omitempty"`
+}
+
 type AppState struct {
 	StartedAt       string                       `json:"startedAt"`
 	Runtime         RuntimeState                 `json:"runtime"`
@@ -184,7 +190,60 @@ type AppState struct {
 	GroupSelections map[string]string            `json:"groupSelections"`
 	Groups          map[string]GroupState        `json:"groups,omitempty"`
 	TransitRoutes   map[string]TransitRouteState `json:"transitRoutes,omitempty"`
+	Host            HostState                    `json:"host,omitempty"`
 	Events          []EventEntry                 `json:"events"`
+}
+
+type HostStatus struct {
+	Mode             string   `json:"mode"`
+	DesktopMode      bool     `json:"desktopMode"`
+	AutostartEnabled bool     `json:"autostartEnabled"`
+	AutostartManaged bool     `json:"autostartManaged"`
+	ConfigPath       string   `json:"configPath,omitempty"`
+	RuntimeDir       string   `json:"runtimeDir,omitempty"`
+	ListenAddress    string   `json:"listenAddress,omitempty"`
+	Logs             []string `json:"logs,omitempty"`
+}
+
+type MainServiceStatus struct {
+	Ready          bool   `json:"ready"`
+	State          string `json:"state"`
+	Mode           string `json:"mode"`
+	Controller     string `json:"controller,omitempty"`
+	ConfigPath     string `json:"configPath,omitempty"`
+	BlockingReason string `json:"blockingReason,omitempty"`
+	Message        string `json:"message"`
+}
+
+type UpdaterStatus struct {
+	Mode            string `json:"mode"`
+	Running         bool   `json:"running"`
+	State           string `json:"state"`
+	CurrentVersion  string `json:"currentVersion,omitempty"`
+	LatestVersion   string `json:"latestVersion,omitempty"`
+	UpdateAvailable bool   `json:"updateAvailable"`
+	CanAutoApply    bool   `json:"canAutoApply"`
+	ReleaseURL      string `json:"releaseUrl,omitempty"`
+	AssetName       string `json:"assetName,omitempty"`
+	AssetURL        string `json:"assetUrl,omitempty"`
+	CheckedAt       string `json:"checkedAt,omitempty"`
+	Message         string `json:"message,omitempty"`
+}
+
+type BootstrapAuthStatus struct {
+	Authenticated         bool   `json:"authenticated"`
+	Username              string `json:"username,omitempty"`
+	RequiresPasswordReset bool   `json:"requiresPasswordReset"`
+}
+
+type BootstrapStatus struct {
+	Host           HostStatus          `json:"host"`
+	MainService    MainServiceStatus   `json:"mainService"`
+	Updater        UpdaterStatus       `json:"updater"`
+	Setup          SetupState          `json:"setup"`
+	Auth           BootstrapAuthStatus `json:"auth"`
+	NextStep       string              `json:"nextStep"`
+	BlockingReason string              `json:"blockingReason,omitempty"`
 }
 
 type GroupCandidate struct {
@@ -338,6 +397,7 @@ type SetupCheck struct {
 type SetupState struct {
 	Required             bool         `json:"required"`
 	NeedsPasswordReset   bool         `json:"needsPasswordReset"`
+	AdminUsername        string       `json:"adminUsername"`
 	HasSubscriptions     bool         `json:"hasSubscriptions"`
 	HasRealSubscriptions bool         `json:"hasRealSubscriptions"`
 	HasEgressGroups      bool         `json:"hasEgressGroups"`

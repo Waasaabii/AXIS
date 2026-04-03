@@ -110,6 +110,14 @@ func BuildOpenAPISpec() map[string]any {
 			},
 			"required": []string{"password"},
 		},
+		"BootstrapAdminRequest": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"username": map[string]any{"type": "string"},
+				"password": map[string]any{"type": "string"},
+			},
+			"required": []string{"username", "password"},
+		},
 		"RuntimeApplyResult": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -515,6 +523,80 @@ func BuildOpenAPISpec() map[string]any {
 			},
 			"required": []string{"app", "runtime", "counts", "warnings", "recentEvents"},
 		},
+		"HostStatus": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"mode":             map[string]any{"type": "string"},
+				"desktopMode":      map[string]any{"type": "boolean"},
+				"autostartEnabled": map[string]any{"type": "boolean"},
+				"autostartManaged": map[string]any{"type": "boolean"},
+				"configPath":       map[string]any{"type": "string"},
+				"runtimeDir":       map[string]any{"type": "string"},
+				"listenAddress":    map[string]any{"type": "string"},
+				"logs":             map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			},
+			"required": []string{"mode", "desktopMode", "autostartEnabled", "autostartManaged"},
+		},
+		"MainServiceStatus": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"ready":          map[string]any{"type": "boolean"},
+				"state":          map[string]any{"type": "string"},
+				"mode":           map[string]any{"type": "string"},
+				"controller":     map[string]any{"type": "string"},
+				"configPath":     map[string]any{"type": "string"},
+				"blockingReason": map[string]any{"type": "string"},
+				"message":        map[string]any{"type": "string"},
+			},
+			"required": []string{"ready", "state", "mode", "message"},
+		},
+		"UpdaterStatus": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"mode":            map[string]any{"type": "string"},
+				"running":         map[string]any{"type": "boolean"},
+				"state":           map[string]any{"type": "string"},
+				"currentVersion":  map[string]any{"type": "string"},
+				"latestVersion":   map[string]any{"type": "string"},
+				"updateAvailable": map[string]any{"type": "boolean"},
+				"canAutoApply":    map[string]any{"type": "boolean"},
+				"releaseUrl":      map[string]any{"type": "string"},
+				"assetName":       map[string]any{"type": "string"},
+				"assetUrl":        map[string]any{"type": "string"},
+				"checkedAt":       map[string]any{"type": "string"},
+				"message":         map[string]any{"type": "string"},
+			},
+			"required": []string{"mode", "running", "state", "updateAvailable", "canAutoApply"},
+		},
+		"BootstrapAuthStatus": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"authenticated":         map[string]any{"type": "boolean"},
+				"username":              map[string]any{"type": "string"},
+				"requiresPasswordReset": map[string]any{"type": "boolean"},
+			},
+			"required": []string{"authenticated", "requiresPasswordReset"},
+		},
+		"BootstrapStatus": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"host":           schemaRef("HostStatus"),
+				"mainService":    schemaRef("MainServiceStatus"),
+				"updater":        schemaRef("UpdaterStatus"),
+				"setup":          schemaRef("SetupState"),
+				"auth":           schemaRef("BootstrapAuthStatus"),
+				"nextStep":       map[string]any{"type": "string"},
+				"blockingReason": map[string]any{"type": "string"},
+			},
+			"required": []string{"host", "mainService", "updater", "setup", "auth", "nextStep"},
+		},
+		"HostAutostartRequest": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"enabled": map[string]any{"type": "boolean"},
+			},
+			"required": []string{"enabled"},
+		},
 		"RenderedConfigResponse": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -647,6 +729,7 @@ func BuildOpenAPISpec() map[string]any {
 			"properties": map[string]any{
 				"required":             map[string]any{"type": "boolean"},
 				"needsPasswordReset":   map[string]any{"type": "boolean"},
+				"adminUsername":        map[string]any{"type": "string"},
 				"hasSubscriptions":     map[string]any{"type": "boolean"},
 				"hasRealSubscriptions": map[string]any{"type": "boolean"},
 				"hasEgressGroups":      map[string]any{"type": "boolean"},
@@ -654,7 +737,7 @@ func BuildOpenAPISpec() map[string]any {
 				"checks":               map[string]any{"type": "array", "items": schemaRef("SetupCheck")},
 				"reasons":              map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			},
-			"required": []string{"required", "needsPasswordReset", "hasSubscriptions", "hasRealSubscriptions", "hasEgressGroups", "hasListeners", "checks", "reasons"},
+			"required": []string{"required", "needsPasswordReset", "adminUsername", "hasSubscriptions", "hasRealSubscriptions", "hasEgressGroups", "hasListeners", "checks", "reasons"},
 		},
 		"ControllerStatusResponse": map[string]any{
 			"type": "object",
@@ -970,6 +1053,7 @@ func BuildOpenAPISpec() map[string]any {
 				"responses": map[string]any{
 					"200": jsonResponse("登录成功", schemaRef("LoginResponse")),
 					"401": jsonResponse("账号或密码错误", schemaRef("ErrorResponse")),
+					"409": jsonResponse("首次初始化未完成", schemaRef("ErrorResponse")),
 				},
 			},
 			"delete": map[string]any{
@@ -989,10 +1073,74 @@ func BuildOpenAPISpec() map[string]any {
 				},
 			},
 		},
+		"/api/setup/admin": map[string]any{
+			"put": map[string]any{
+				"summary":     "首次初始化管理员账号",
+				"requestBody": jsonBody(schemaRef("BootstrapAdminRequest")),
+				"responses": map[string]any{
+					"200": jsonResponse("管理员账号已创建", schemaRef("SimpleOkResponse")),
+					"400": jsonResponse("请求参数错误", schemaRef("ErrorResponse")),
+					"409": jsonResponse("当前不处于首次初始化状态", schemaRef("ErrorResponse")),
+					"500": jsonResponse("服务端错误", schemaRef("ErrorResponse")),
+				},
+			},
+		},
+		"/api/bootstrap/status": map[string]any{
+			"get": map[string]any{
+				"summary":   "查询启动入口状态",
+				"responses": map[string]any{"200": jsonResponse("启动入口状态", schemaRef("BootstrapStatus"))},
+			},
+		},
 		"/api/status": map[string]any{
 			"get": map[string]any{
 				"summary":   "系统总览",
 				"responses": map[string]any{"200": jsonResponse("系统状态概览", schemaRef("StatusResponse")), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},
+			},
+		},
+		"/api/host/status": map[string]any{
+			"get": map[string]any{
+				"summary":   "查询宿主状态",
+				"responses": map[string]any{"200": jsonResponse("宿主状态", schemaRef("HostStatus")), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},
+			},
+		},
+		"/api/host/updater": map[string]any{
+			"get": map[string]any{
+				"summary":   "查询桌面更新服务状态",
+				"responses": map[string]any{"200": jsonResponse("更新服务状态", schemaRef("UpdaterStatus")), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},
+			},
+		},
+		"/api/host/updater/check": map[string]any{
+			"post": map[string]any{
+				"summary": "触发桌面更新检查",
+				"responses": map[string]any{
+					"200": jsonResponse("检查已触发", schemaRef("SimpleOkResponse")),
+					"400": jsonResponse("当前模式不支持", schemaRef("ErrorResponse")),
+					"401": jsonResponse("未登录", schemaRef("ErrorResponse")),
+				},
+			},
+		},
+		"/api/host/open-browser": map[string]any{
+			"post": map[string]any{
+				"summary": "打开宿主控制台",
+				"parameters": []map[string]any{
+					{"name": "url", "in": "query", "schema": map[string]any{"type": "string"}, "description": "可选目标地址"},
+				},
+				"responses": map[string]any{
+					"200": jsonResponse("已触发打开动作", schemaRef("SimpleOkResponse")),
+					"400": jsonResponse("当前模式不支持", schemaRef("ErrorResponse")),
+					"401": jsonResponse("未登录", schemaRef("ErrorResponse")),
+				},
+			},
+		},
+		"/api/host/autostart": map[string]any{
+			"put": map[string]any{
+				"summary":     "设置宿主开机自启",
+				"requestBody": jsonBody(schemaRef("HostAutostartRequest")),
+				"responses": map[string]any{
+					"200": jsonResponse("设置结果", schemaRef("SimpleOkResponse")),
+					"400": jsonResponse("当前模式不支持", schemaRef("ErrorResponse")),
+					"401": jsonResponse("未登录", schemaRef("ErrorResponse")),
+				},
 			},
 		},
 		"/api/config": map[string]any{
@@ -1175,7 +1323,7 @@ func BuildOpenAPISpec() map[string]any {
 		"/api/setup-state": map[string]any{
 			"get": map[string]any{
 				"summary":   "首次初始化状态",
-				"responses": map[string]any{"200": jsonResponse("Setup 检查结果", schemaRef("SetupState")), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},
+				"responses": map[string]any{"200": jsonResponse("Setup 检查结果", schemaRef("SetupState"))},
 			},
 		},
 		"/api/controller/probe": map[string]any{

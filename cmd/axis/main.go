@@ -21,6 +21,14 @@ func main() {
 		if err := serve(); err != nil {
 			log.Fatal(err)
 		}
+	case "reset-setup":
+		targetConfigPath := configPath()
+		if len(os.Args) > 2 && os.Args[2] != "" {
+			targetConfigPath = os.Args[2]
+		}
+		if err := resetSetup(targetConfigPath); err != nil {
+			log.Fatal(err)
+		}
 	case "hash-password":
 		if len(os.Args) < 3 {
 			log.Fatal("请提供需要哈希的密码")
@@ -47,9 +55,17 @@ func main() {
 
 func configPath() string {
 	if value := os.Getenv("PROXYRELAY_CONFIG"); value != "" {
-		return value
+		resolvedPath, err := axis.EnsureConfigPath(value)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return resolvedPath
 	}
-	return "config/proxyrelay.yaml"
+	resolvedPath, err := axis.EnsureConfigPath("")
+	if err != nil {
+		log.Fatal(err)
+	}
+	return resolvedPath
 }
 
 func serve() error {
@@ -75,4 +91,17 @@ func printPreflight() error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(snapshot)
+}
+
+func resetSetup(targetConfigPath string) error {
+	result, err := axis.ResetSetup(targetConfigPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("[axis] 已重置 Setup 状态\n")
+	fmt.Printf("[axis] 配置文件: %s\n", result.ConfigPath)
+	fmt.Printf("[axis] 已清理运行目录: %s\n", result.RuntimeDir)
+	fmt.Printf("[axis] 下次启动后会重新进入 Setup 流程\n")
+	return nil
 }

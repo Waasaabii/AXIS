@@ -6,9 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { NoticeCard } from '@/components/NoticeCard'
 import { PageHeader } from '@/components/PageHeader'
-import { Save, RefreshCw } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
@@ -27,6 +28,12 @@ export default function SystemConfig() {
   const { data: configData, mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
   const { data: renderedData, mutate: mutateRendered } = useSWR('/api/rendered-config', api.getRenderedConfig)
   const { data: versionsData, mutate: mutateVersions } = useSWR('/api/mihomo/versions', api.getMihomoVersions)
+  const { data: hostData, mutate: mutateHost } = useSWR('/api/host/status', api.getHostStatus, {
+    refreshInterval: 5000,
+  })
+  const { data: updaterData, mutate: mutateUpdater } = useSWR('/api/host/updater', api.getUpdaterStatus, {
+    refreshInterval: 5000,
+  })
   
   const [editorContent, setEditorContent] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -35,6 +42,9 @@ export default function SystemConfig() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [versionActionKey, setVersionActionKey] = useState("")
+  const [isUpdatingAutostart, setIsUpdatingAutostart] = useState(false)
+  const [isOpeningHost, setIsOpeningHost] = useState(false)
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false)
 
   // Sync config when loaded
   useEffect(() => {
@@ -87,7 +97,47 @@ export default function SystemConfig() {
     }
   }
 
+  const handleHostAutostartChange = async (checked: boolean) => {
+    setIsUpdatingAutostart(true)
+    try {
+      await api.setHostAutostart(checked)
+      toast.success(checked ? '已启用开机自启' : '已关闭开机自启')
+      mutateHost()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '更新失败')
+    } finally {
+      setIsUpdatingAutostart(false)
+    }
+  }
+
+  const handleOpenHostControlCenter = async () => {
+    setIsOpeningHost(true)
+    try {
+      await api.openHostControlCenter()
+      toast.success(hostData?.desktopMode ? '桌面控制台已拉起' : '已触发宿主动作')
+      mutateHost()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '打开失败')
+    } finally {
+      setIsOpeningHost(false)
+    }
+  }
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingUpdates(true)
+    try {
+      await api.checkForUpdates()
+      toast.success('已触发桌面更新检查')
+      mutateUpdater()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '检查失败')
+    } finally {
+      setIsCheckingUpdates(false)
+    }
+  }
+
   const installedByVersion = Object.fromEntries((versionsData?.installedVersions || []).map((item) => [item.version, item]))
+  const hostLogs = hostData?.logs || []
 
   return (
     <div className="space-y-6 h-[calc(100vh-8rem)] flex flex-col">
@@ -104,10 +154,11 @@ export default function SystemConfig() {
       />
 
       <Tabs defaultValue="editor" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid w-[620px] grid-cols-4">
+        <TabsList className="grid w-[760px] grid-cols-5">
           <TabsTrigger value="editor">高级配置</TabsTrigger>
           <TabsTrigger value="rendered">当前生成结果</TabsTrigger>
           <TabsTrigger value="password">管理员密码</TabsTrigger>
+          <TabsTrigger value="host">宿主集成</TabsTrigger>
           <TabsTrigger value="mihomo">Mihomo 版本</TabsTrigger>
         </TabsList>
         
@@ -238,6 +289,154 @@ export default function SystemConfig() {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="host" className="flex-1 flex flex-col mt-4 min-h-0">
+          <div className="grid gap-4 lg:grid-cols-[1.15fr_1fr]">
+            <Card className="border-zinc-200">
+              <CardHeader className="py-4 border-b bg-zinc-50/50">
+                <CardTitle className="text-base">当前宿主状态</CardTitle>
+                <CardDescription className="text-xs">
+                  同一套前端会根据运行环境自动切到 Web API 或 Wails 原生绑定，这里显示当前落在哪一侧。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4 text-sm">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg bg-zinc-50 p-3">
+                    <div className="text-zinc-500 text-xs mb-1">运行模式</div>
+                    <div className="font-medium">{hostData?.mode === 'desktop' ? 'desktop / Wails' : hostData?.mode || '加载中...'}</div>
+                  </div>
+                  <div className="rounded-lg bg-zinc-50 p-3">
+                    <div className="text-zinc-500 text-xs mb-1">开机自启</div>
+                    <div className="font-medium">
+                      {hostData?.autostartManaged ? (hostData?.autostartEnabled ? '已启用' : '未启用') : '当前模式不支持'}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-zinc-50 p-3">
+                    <div className="text-zinc-500 text-xs mb-1">配置文件</div>
+                    <div className="font-mono break-all">{hostData?.configPath || '加载中...'}</div>
+                  </div>
+                  <div className="rounded-lg bg-zinc-50 p-3">
+                    <div className="text-zinc-500 text-xs mb-1">运行目录</div>
+                    <div className="font-mono break-all">{hostData?.runtimeDir || '加载中...'}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-zinc-200 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="font-medium">宿主动作</div>
+                      <p className="text-xs text-zinc-500">
+                        桌面模式下会直接唤起当前 Wails 窗口；Web 模式下不会暴露本地壳能力。
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!hostData?.desktopMode || isOpeningHost}
+                      onClick={handleOpenHostControlCenter}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      {isOpeningHost ? '处理中...' : '打开桌面控制台'}
+                    </Button>
+                  </div>
+
+                  <div className="rounded-md bg-zinc-50 p-3">
+                    <div className="text-zinc-500 text-xs mb-1">HTTP 监听地址</div>
+                    <div className="font-mono break-all">{hostData?.listenAddress || '未提供'}</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-4">
+              <Card className="border-zinc-200">
+                <CardHeader className="py-4 border-b bg-zinc-50/50">
+                  <CardTitle className="text-base">开机自启</CardTitle>
+                  <CardDescription className="text-xs">
+                    当前只在桌面宿主中可配置。Web 服务模式不会替你接管系统启动项。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4">
+                    <div className="space-y-1">
+                      <div className="font-medium">启用开机自启</div>
+                      <p className="text-xs text-zinc-500">
+                        {hostData?.autostartManaged ? '由当前宿主管理系统启动项。' : '当前运行模式不支持。'}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={Boolean(hostData?.autostartEnabled)}
+                      disabled={!hostData?.autostartManaged || isUpdatingAutostart}
+                      onCheckedChange={handleHostAutostartChange}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-zinc-200">
+                <CardHeader className="py-4 border-b bg-zinc-50/50">
+                  <CardTitle className="text-base">桌面更新服务</CardTitle>
+                  <CardDescription className="text-xs">
+                    这里展示独立 updater 守护进程的状态，并允许手动触发一次 GitHub Releases 检查。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-6 text-sm">
+                  <div className="grid gap-3">
+                    <div className="rounded-lg bg-zinc-50 p-3">
+                      <div className="mb-1 text-xs text-zinc-500">当前状态</div>
+                      <div className="font-medium">{updaterData?.state || '加载中...'}</div>
+                    </div>
+                    <div className="rounded-lg bg-zinc-50 p-3">
+                      <div className="mb-1 text-xs text-zinc-500">版本信息</div>
+                      <div className="font-medium">
+                        {updaterData?.latestVersion
+                          ? `${updaterData.currentVersion || 'unknown'} -> ${updaterData.latestVersion}`
+                          : updaterData?.currentVersion || '加载中...'}
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-zinc-50 p-3">
+                      <div className="mb-1 text-xs text-zinc-500">说明</div>
+                      <div>{updaterData?.message || '当前没有更新服务说明。'}</div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Button variant="outline" size="sm" disabled={!hostData?.desktopMode || isCheckingUpdates} onClick={handleCheckForUpdates}>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      {isCheckingUpdates ? '检查中...' : '检查更新'}
+                    </Button>
+                    {updaterData?.releaseUrl ? (
+                      <Button asChild variant="ghost" size="sm">
+                        <a href={updaterData.releaseUrl} target="_blank" rel="noreferrer">查看发布页</a>
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-zinc-200">
+                <CardHeader className="py-4 border-b bg-zinc-50/50">
+                  <CardTitle className="text-base">宿主日志</CardTitle>
+                  <CardDescription className="text-xs">
+                    这里只放桌面壳相关动作，便于排查开机自启、二次启动唤醒和窗口拉起。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  {!hostLogs.length ? (
+                    <p className="text-sm text-zinc-500">当前还没有宿主事件。</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {hostLogs.map((entry: string, index: number) => (
+                        <div key={`${entry}-${index}`} className="rounded-lg bg-zinc-50 px-3 py-2 text-sm">
+                          {entry}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="mihomo" className="flex-1 flex flex-col mt-4 min-h-0">

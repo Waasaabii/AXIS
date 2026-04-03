@@ -16,6 +16,16 @@ func TestResolveDefaultRuntimeWorkdir(t *testing.T) {
 	}
 }
 
+func TestResolveRuntimeDir(t *testing.T) {
+	configPath := "/opt/axis/config/proxyrelay.yaml"
+	if got := ResolveRuntimeDir(configPath, "../runtime"); got != "/opt/axis/runtime" {
+		t.Fatalf("unexpected relative runtime dir: %s", got)
+	}
+	if got := ResolveRuntimeDir(configPath, "/var/lib/proxyrelay/runtime"); got != "/var/lib/proxyrelay/runtime" {
+		t.Fatalf("unexpected absolute runtime dir: %s", got)
+	}
+}
+
 func TestWriteConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "proxyrelay.yaml")

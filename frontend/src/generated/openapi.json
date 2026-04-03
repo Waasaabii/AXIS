@@ -219,6 +219,73 @@
         ],
         "type": "object"
       },
+      "BootstrapAdminRequest": {
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
+      "BootstrapAuthStatus": {
+        "properties": {
+          "authenticated": {
+            "type": "boolean"
+          },
+          "requiresPasswordReset": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "authenticated",
+          "requiresPasswordReset"
+        ],
+        "type": "object"
+      },
+      "BootstrapStatus": {
+        "properties": {
+          "auth": {
+            "$ref": "#/components/schemas/BootstrapAuthStatus"
+          },
+          "blockingReason": {
+            "type": "string"
+          },
+          "host": {
+            "$ref": "#/components/schemas/HostStatus"
+          },
+          "mainService": {
+            "$ref": "#/components/schemas/MainServiceStatus"
+          },
+          "nextStep": {
+            "type": "string"
+          },
+          "setup": {
+            "$ref": "#/components/schemas/SetupState"
+          },
+          "updater": {
+            "$ref": "#/components/schemas/UpdaterStatus"
+          }
+        },
+        "required": [
+          "host",
+          "mainService",
+          "updater",
+          "setup",
+          "auth",
+          "nextStep"
+        ],
+        "type": "object"
+      },
       "Config": {
         "properties": {
           "admin": {
@@ -701,6 +768,55 @@
         ],
         "type": "object"
       },
+      "HostAutostartRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "HostStatus": {
+        "properties": {
+          "autostartEnabled": {
+            "type": "boolean"
+          },
+          "autostartManaged": {
+            "type": "boolean"
+          },
+          "configPath": {
+            "type": "string"
+          },
+          "desktopMode": {
+            "type": "boolean"
+          },
+          "listenAddress": {
+            "type": "string"
+          },
+          "logs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "runtimeDir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "desktopMode",
+          "autostartEnabled",
+          "autostartManaged"
+        ],
+        "type": "object"
+      },
       "LandingProxy": {
         "properties": {
           "enabled": {
@@ -993,6 +1109,38 @@
           "requiresPasswordReset",
           "setupRequired",
           "user"
+        ],
+        "type": "object"
+      },
+      "MainServiceStatus": {
+        "properties": {
+          "blockingReason": {
+            "type": "string"
+          },
+          "configPath": {
+            "type": "string"
+          },
+          "controller": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ready",
+          "state",
+          "mode",
+          "message"
         ],
         "type": "object"
       },
@@ -1702,6 +1850,9 @@
       },
       "SetupState": {
         "properties": {
+          "adminUsername": {
+            "type": "string"
+          },
           "checks": {
             "items": {
               "$ref": "#/components/schemas/SetupCheck"
@@ -1736,6 +1887,7 @@
         "required": [
           "required",
           "needsPasswordReset",
+          "adminUsername",
           "hasSubscriptions",
           "hasRealSubscriptions",
           "hasEgressGroups",
@@ -2176,6 +2328,54 @@
         },
         "type": "object"
       },
+      "UpdaterStatus": {
+        "properties": {
+          "assetName": {
+            "type": "string"
+          },
+          "assetUrl": {
+            "type": "string"
+          },
+          "canAutoApply": {
+            "type": "boolean"
+          },
+          "checkedAt": {
+            "type": "string"
+          },
+          "currentVersion": {
+            "type": "string"
+          },
+          "latestVersion": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "releaseUrl": {
+            "type": "string"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string"
+          },
+          "updateAvailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "running",
+          "state",
+          "updateAvailable",
+          "canAutoApply"
+        ],
+        "type": "object"
+      },
       "UserIdentity": {
         "properties": {
           "username": {
@@ -2196,6 +2396,23 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/bootstrap/status": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapStatus"
+                }
+              }
+            },
+            "description": "启动入口状态"
+          }
+        },
+        "summary": "查询启动入口状态"
+      }
+    },
     "/api/config": {
       "get": {
         "responses": {
@@ -2736,6 +2953,191 @@
           }
         },
         "summary": "动态代理服务健康状态"
+      }
+    },
+    "/api/host/autostart": {
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostAutostartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            },
+            "description": "设置结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "当前模式不支持"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "设置宿主开机自启"
+      }
+    },
+    "/api/host/open-browser": {
+      "post": {
+        "parameters": [
+          {
+            "description": "可选目标地址",
+            "in": "query",
+            "name": "url",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            },
+            "description": "已触发打开动作"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "当前模式不支持"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "打开宿主控制台"
+      }
+    },
+    "/api/host/status": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostStatus"
+                }
+              }
+            },
+            "description": "宿主状态"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "查询宿主状态"
+      }
+    },
+    "/api/host/updater": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdaterStatus"
+                }
+              }
+            },
+            "description": "更新服务状态"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "查询桌面更新服务状态"
+      }
+    },
+    "/api/host/updater/check": {
+      "post": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            },
+            "description": "检查已触发"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "当前模式不支持"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "触发桌面更新检查"
       }
     },
     "/api/landing-proxies": {
@@ -3784,6 +4186,16 @@
               }
             },
             "description": "账号或密码错误"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "首次初始化未完成"
           }
         },
         "summary": "登录"
@@ -3858,8 +4270,35 @@
               }
             },
             "description": "Setup 检查结果"
+          }
+        },
+        "summary": "首次初始化状态"
+      }
+    },
+    "/api/setup/admin": {
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapAdminRequest"
+              }
+            }
           },
-          "401": {
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            },
+            "description": "管理员账号已创建"
+          },
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3867,10 +4306,30 @@
                 }
               }
             },
-            "description": "未登录"
+            "description": "请求参数错误"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "当前不处于首次初始化状态"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
           }
         },
-        "summary": "首次初始化状态"
+        "summary": "首次初始化管理员账号"
       }
     },
     "/api/status": {
