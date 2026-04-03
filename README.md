@@ -94,36 +94,61 @@ pnpm dev
 
 | 步骤 | 动作 |
 |------|------|
-| 本地配置 | 基于 `config/proxyrelay.yaml` 或模板生成 `runtime/dev/proxyrelay.dev.yaml` |
+| 本地配置 | 生成或复用开发 profile：`~/.../AXIS/dev/config/proxyrelay.yaml` |
 | 后端启动 | 启动 AXIS API，并监听 `8787` |
 | 前端启动 | 启动 React + Vite 开发服务器，并监听 `5173` |
 | 联调代理 | Vite 自动把 `/api/*` 代理到后端 |
+| 页面访问 | Go 服务会把非 `/api/*` 请求反向代理到 Vite，保留热更新体验 |
 
 ### 4. 打开控制台
 
 浏览器访问：
 
 ```text
+http://127.0.0.1:8787
+```
+
+如果你想直接访问 Vite 开发服务器，也可以打开：
+
+```text
 http://127.0.0.1:5173
 ```
 
-如果你使用的是开源模板配置，首次登录默认凭据是：
+现在默认入口会先进入 `Launch` 页面，由它判断下一步：
 
-| 用户名 | 密码 |
-|--------|------|
-| `admin` | `admin` |
+- 首次初始化未完成：跳去 `/setup`
+- 未登录且初始化已具备管理员账号：跳去 `/login`
+- 已登录：直接进 `/dashboard`
+- 已登录且初始化完成：跳去 `/dashboard`
 
-登录后会被要求修改密码，新的密码会自动写入安全哈希。
+`reset:setup` 之后不会再要求你先用默认账号登录。
+你会先进入 `Setup` 页面，自己输入管理员账号和密码完成初始化，随后前端会自动登录并直接进入控制台。
+如果订阅、出口线路、本地入口还没补齐，控制台里会继续提示，但不会再强制卡在 `Setup`。
 
-### 5. 如果你想连本地 Mihomo
+### 5. 开发环境默认就是完整能力
 
-默认开发模式是 `render-only`，只渲染配置，不真的接管运行中的 Mihomo。
+默认开发模式会直接让 AXIS 接管运行时，不是“只写配置不下发”的裁剪版。
 
-如果你想一起联调本地 Mihomo，可以用：
+如果你只是想调界面或调配置，不希望当前开发环境真的接管运行时，可以显式切到仅渲染模式：
 
 ```bash
-pnpm dev:managed
+pnpm dev:web:render-only
 ```
+
+如果你想把当前开发环境重置回“重新走 Setup”的状态，可以执行：
+
+```bash
+pnpm reset:setup
+```
+
+这个命令会：
+
+- 把开发 profile 的配置重置回未初始化状态
+- 清空开发 profile 下的运行时目录、缓存、状态库和开发期痕迹
+- 失效当前开发 profile 下已有会话
+- 下次启动时重新从 Launch -> Login / Setup 流程开始
+
+如果桌面端当前已经在运行，重置后还需要先彻底退出现有桌面进程，再重新打开，才能读到新的初始化状态。
 
 ## 仓库怎么管理
 
@@ -137,17 +162,209 @@ pnpm dev:managed
 
 ```bash
 pnpm dev
-pnpm dev:managed
+pnpm dev:desktop
+pnpm dev:web:render-only
+pnpm dev:desktop:render-only
 pnpm build
+pnpm build:desktop
 pnpm lint
 pnpm test
 ```
+
+其中：
+
+- `pnpm dev` 保留 Vite 热更新，并默认启用 AXIS 的完整运行时能力
+- `pnpm dev:desktop` 启动 Wails v2 桌面壳，保留前端热更新，并默认启用 AXIS 的完整运行时能力
+- `pnpm build` 会先构建前端，再把 `frontend/dist` 内嵌进 Go 二进制
+- `pnpm build:desktop` 会先生成最新 OpenAPI 类型，再走 Wails 桌面打包流程
+
+## 数据目录与路径规则
+
+AXIS 现在统一采用和 Electron 类似的 `userData` 目录策略。
+
+这套规则只有两层：
+
+- 正式运行数据：`userData/AXIS`
+- 开发 profile 数据：`userData/AXIS/dev`
+
+默认情况下：
+
+- CLI `go run ./cmd/axis serve`
+- 桌面应用直接启动
+- `pnpm dev`
+- `pnpm dev:desktop`
+- `pnpm reset:setup`
+
+都会围绕这套目录工作，不再默认往仓库根目录写运行时文件，也不再根据 `cwd` 猜测其他位置。
+
+### 默认目录
+
+正式运行：
+
+```text
+macOS:   ~/Library/Application Support/AXIS
+Windows: %APPDATA%/AXIS
+Linux:   ~/.config/AXIS
+```
+
+开发 profile：
+
+```text
+macOS:   ~/Library/Application Support/AXIS/dev
+Windows: %APPDATA%/AXIS/dev
+Linux:   ~/.config/AXIS/dev
+```
+
+### 目录结构
+
+正式运行根目录和开发 profile 根目录内部结构保持一致：
+
+```text
+AXIS_HOME/
+  config/
+    proxyrelay.yaml
+  runtime/
+    axis.db
+    control-state.json
+    mihomo.yaml
+    mihomo.last-good.yaml
+    providers/
+    mihomo/
+      versions/
+  updater/
+    state.json
+    command.json
+    updater.log
+  logs/
+```
+
+### 覆盖规则
+
+只有两种显式覆盖方式：
+
+- `AXIS_HOME`
+  - 覆盖整个数据根目录
+- `PROXYRELAY_CONFIG`
+  - 只覆盖配置文件路径
+
+如果你没有显式设置这两个变量，AXIS 永远只会落到默认 `userData/AXIS` 或 `userData/AXIS/dev`，不会偷偷回退到仓库目录、应用同级目录或别的用户目录。
+
+### 构建产物和运行态产物的区别
+
+这两个不要混淆：
+
+- 构建产物仍然留在仓库里
+  - `./desktop/build`
+  - `./.tmp/desktop`
+- 运行态产物统一去 `userData`
+  - 配置
+  - 数据库
+  - 渲染结果
+  - updater 状态
+  - 开发 profile 痕迹
+
+## 桌面模式
+
+如果你要直接开发桌面壳，而不是浏览器里的 Web 控制台：
+
+```bash
+pnpm dev:desktop
+```
+
+如果你只想调界面和配置，不希望桌面开发环境真的接管运行时：
+
+```bash
+pnpm dev:desktop:render-only
+```
+
+如果你只想让 Web 开发环境停留在“仅渲染配置”：
+
+```bash
+pnpm dev:web:render-only
+```
+
+桌面模式的实现方式是：
+
+- Go 核心服务保持不变
+- Wails v2 直接绑定同一套 Go Service
+- React 前端通过 `api` provider 自动判断当前走 HTTP 还是 Wails 原生调用
+- 启动入口统一先走 Launch 状态页
+- 桌面模式会额外拉起一个独立 updater 守护进程，用于检查 GitHub Releases
+
+桌面应用启动时的配置来源是：
+
+1. 如果设置了 `PROXYRELAY_CONFIG`，优先使用它
+2. 否则固定使用 `userData/AXIS/config/proxyrelay.yaml`
+3. 如果配置不存在，会在该目录首启生成默认配置
+
+开发脚本不会再往仓库根目录写运行时产物，而是固定落到开发 profile：
+
+```text
+macOS:   ~/Library/Application Support/AXIS/dev
+Windows: %APPDATA%/AXIS/dev
+Linux:   ~/.config/AXIS/dev
+```
+
+正式桌面/CLI 默认配置位置是：
+
+```text
+macOS:   ~/Library/Application Support/AXIS/config/proxyrelay.yaml
+Windows: %APPDATA%/AXIS/config/proxyrelay.yaml
+Linux:   ~/.config/AXIS/config/proxyrelay.yaml
+```
+
+如果要构建桌面产物：
+
+```bash
+pnpm build:desktop
+```
+
+可选地，你也可以通过环境变量指定 Wails 目标平台：
+
+```bash
+AXIS_WAILS_PLATFORM=windows/amd64 pnpm build:desktop
+```
+
+在 macOS 上，`build:desktop` 现在会自动做桌面产物后处理：
+
+- 递归清理产物上的扩展属性
+- 默认执行一次 ad-hoc 签名，避免产物还是“完全裸包”
+- 如果你提供 `Developer ID` 证书，还会改用正式签名
+- 如果你再提供 `notarytool` profile，还会继续做 notarization 和 staple
+
+示例：
+
+```bash
+AXIS_MAC_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" pnpm build:desktop
+```
+
+```bash
+AXIS_MAC_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+AXIS_MAC_NOTARY_PROFILE="axis-notary" \
+pnpm build:desktop
+```
+
+说明：
+
+- 没有 `AXIS_MAC_SIGN_IDENTITY` 时，脚本只会做 ad-hoc 签名，适合本机自测
+- 要发给别的机器长期使用，建议一定配 `Developer ID` 签名
+- 需要避免 Gatekeeper / “无法验证开发者” 一类问题时，还应继续做 notarization
+- `xattr` 只能处理下载隔离标记，不能替代代码签名和 notarization
+- 当前机器如果没有可用 codesigning identity，产物仍然只是“本机测试包”
 
 ## 配置文件
 
 `config/proxyrelay.yaml` 已被 `.gitignore` 排除，不会提交到版本控制。仓库中保留的是 `config/proxyrelay.example.yaml` 模板。
 
-部署到系统服务时，默认配置文件路径是：
+如果你直接运行 AXIS CLI 或桌面应用，而没有显式设置 `PROXYRELAY_CONFIG`，默认配置文件路径是：
+
+```text
+macOS:   ~/Library/Application Support/AXIS/config/proxyrelay.yaml
+Windows: %APPDATA%/AXIS/config/proxyrelay.yaml
+Linux:   ~/.config/AXIS/config/proxyrelay.yaml
+```
+
+如果你通过 `service.sh` 或 systemd 部署，服务模板会显式设置自己的配置文件路径，例如：
 
 ```text
 /etc/proxyrelay/proxyrelay.yaml
@@ -243,7 +460,8 @@ listeners:
 
 ### 密码安全机制
 
-当 `password_hash` 和 `password` 都为空时，系统允许你用 `admin/admin` 首次登录，并强制修改密码。修改后的密码会自动写入 `password_hash`。
+当 `password_hash` 和 `password` 都为空时，系统会把当前 profile 视为“未初始化”。
+这时 `Launch` 会优先跳去 `Setup`，要求你先创建管理员账号和密码；创建完成后，新密码会写入 `password_hash`，旧的默认登录入口不会再放行。
 
 如果你想自己先生成密码哈希：
 
@@ -256,6 +474,7 @@ pnpm run hash-password -- <your-password>
 AXIS 现在有两类 API：
 
 - 公共动态代理 API：给外部程序直接取代理，不需要登录
+- 启动入口 API：给 Launch 页和首次初始化流程判断下一步，不要求已登录
 - 控制面 API：给控制台和运维使用，需要先登录
 
 ### 公共动态代理 API
@@ -284,9 +503,18 @@ socks5://username:password@proxy.example.com:10801
 
 如果你传 `?format=json`，会返回带元信息的 JSON。
 
+### 启动入口 API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/bootstrap/status` | 返回 Launch 页所需的宿主、主服务、更新服务、登录态和 Setup 状态 |
+| GET | `/api/setup-state` | 返回首次初始化状态，未登录也可访问 |
+| PUT | `/api/setup/admin` | 在首次初始化阶段创建管理员账号和密码 |
+
 ### 控制面 API
 
 所有控制面 API 都以 `/api/` 开头，先通过 `POST /api/session` 登录。
+如果当前还没完成首次初始化，`POST /api/session` 会直接返回错误，并要求先走 `Setup`。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -295,6 +523,11 @@ socks5://username:password@proxy.example.com:10801
 | DELETE | `/api/session` | 注销 |
 | PUT | `/api/session/password` | 修改密码 |
 | GET | `/api/status` | 系统总览 |
+| GET | `/api/host/status` | 查询宿主状态 |
+| GET | `/api/host/updater` | 查询桌面 updater 状态 |
+| POST | `/api/host/updater/check` | 触发桌面 updater 立即检查版本 |
+| POST | `/api/host/open-browser` | 打开桌面控制台 |
+| PUT | `/api/host/autostart` | 设置桌面宿主开机自启 |
 | GET | `/api/config` | 读取完整配置 |
 | PUT | `/api/config` | 保存完整配置 |
 | GET | `/api/providers` | 订阅与节点列表 |
@@ -318,11 +551,9 @@ socks5://username:password@proxy.example.com:10801
 | POST | `/api/reload` | 重载运行态 |
 | POST | `/api/subscription-test` | 临时测试订阅 |
 
-## 运行模式
+## 运行开关
 
-### render-only
-
-默认模式。只渲染配置，不要求 Mihomo 已经运行。
+### 仅渲染配置
 
 适合：
 
@@ -335,9 +566,9 @@ runtime:
   render_only: true
 ```
 
-### managed
+### 接管运行时
 
-AXIS 会尝试通过 `external-controller` 接管 Mihomo。
+这是 AXIS 的正常工作状态。AXIS 会通过 `external-controller` 接管 Mihomo，并在需要时下发配置。
 
 适合：
 
@@ -397,7 +628,8 @@ AXIS/
 ├── cmd/
 │   └── axis/                 # Go CLI 入口（serve / preflight / openapi / hash-password）
 ├── config/
-│   └── proxyrelay.example.yaml
+│   └── proxyrelay.example.yaml  # 仓库只保留模板，不再作为默认运行态配置位置
+├── desktop/                  # Wails v2 桌面壳入口与打包配置
 ├── deploy/
 │   ├── install-ubuntu.sh
 │   ├── proxyrelayd.service
@@ -411,9 +643,12 @@ AXIS/
 │       └── generated/        # OpenAPI 生成类型
 ├── internal/
 │   └── axis/                 # Go 后端核心实现
-├── runtime/                  # 运行时产物（自动生成）
 ├── scripts/
-│   └── dev.mjs               # 本地开发入口
+│   ├── axis-paths.mjs        # AXIS userData / dev profile 路径计算
+│   ├── dev.mjs               # Web 开发入口
+│   ├── desktop-dev.mjs       # 桌面开发入口
+│   ├── desktop-build.mjs     # 桌面构建与签名后处理
+│   └── reset-setup.mjs       # 重置开发 profile，重新走 Setup
 ├── service.sh                # systemd 服务管理脚本
 ├── package.json
 ├── pnpm-workspace.yaml
@@ -430,10 +665,26 @@ pnpm install
 pnpm dev
 
 # 启动前端 + 后端 + 本地 Mihomo
-pnpm dev:managed
+pnpm dev
+
+# 开发数据固定写到 userData/AXIS/dev
+# 入口会先进入 Launch，再自动分流到 Login / Setup / Dashboard
+
+# 启动桌面壳（保留前端热更新，默认接管运行时）
+pnpm dev:desktop
+
+# 只渲染配置，不接管运行时
+pnpm dev:web:render-only
+pnpm dev:desktop:render-only
+
+# 重置开发 profile，重新走 Setup
+pnpm reset:setup
 
 # 构建
 pnpm build
+
+# 构建桌面产物
+pnpm build:desktop
 
 # 代码检查
 pnpm lint

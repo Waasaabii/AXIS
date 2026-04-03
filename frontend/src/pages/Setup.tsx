@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import useSWR from "swr"
+import useSWR, { useSWRConfig } from "swr"
 import { AlertTriangle, CheckCircle2, ChevronRight, KeyRound, Link2, Network, Radio, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
@@ -38,7 +38,10 @@ function sanitizeCheckSummary(summary: string) {
 
 export default function Setup() {
   const navigate = useNavigate()
-  const { data: setupState, mutate: mutateSetup } = useSWR("/api/setup-state", api.getSetupState)
+  const { mutate } = useSWRConfig()
+  const { data: setupState, error: setupError, mutate: mutateSetup } = useSWR("/api/setup-state", api.getSetupState)
+  const { data: session, mutate: mutateSession } = useSWR("/api/session", api.getSession)
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [subscriptionName, setSubscriptionName] = useState("airport-main")
@@ -49,6 +52,13 @@ export default function Setup() {
   const refreshSetup = async () => {
     await mutateSetup()
   }
+
+  useEffect(() => {
+    if (!setupState?.adminUsername) {
+      return
+    }
+    setUsername((current) => current || setupState.adminUsername)
+  }, [setupState?.adminUsername])
 
   const handleSavePassword = async () => {
     if (password !== confirmPassword) {
@@ -62,13 +72,29 @@ export default function Setup() {
 
     setIsSavingPassword(true)
     try {
-      await api.updatePassword({ password })
-      toast.success("管理员密码已更新。")
+      if (setupState?.needsPasswordReset) {
+        await api.bootstrapAdmin({ username: username.trim(), password })
+        await api.login({ username: username.trim(), password })
+        await Promise.all([
+          mutate("/api/session"),
+          mutate("/api/bootstrap/status"),
+          mutate("/api/setup-state"),
+        ])
+        toast.success("管理员账号已创建，已自动登录。")
+        await mutateSession()
+        await refreshSetup()
+        navigate("/dashboard", { replace: true })
+        return
+      } else {
+        await api.updatePassword({ password })
+        toast.success("管理员密码已更新。")
+      }
+      setUsername((current) => current.trim())
       setPassword("")
       setConfirmPassword("")
       await refreshSetup()
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "密码更新失败，请稍后再试。")
+      toast.error(error instanceof ApiError ? error.message : "管理员账号保存失败，请稍后再试。")
     } finally {
       setIsSavingPassword(false)
     }
@@ -99,6 +125,16 @@ export default function Setup() {
   }
 
   if (!setupState) {
+    if (setupError) {
+      return (
+        <div className="mx-auto flex min-h-[50vh] max-w-xl flex-col items-center justify-center gap-4 text-center">
+          <div className="text-sm text-red-500">{setupError instanceof ApiError ? setupError.message : "初始化状态读取失败"}</div>
+          <Button variant="outline" onClick={() => mutateSetup()}>
+            重新检查
+          </Button>
+        </div>
+      )
+    }
     return <div className="flex min-h-[50vh] items-center justify-center text-sm text-zinc-500">正在检查初始化状态...</div>
   }
 
@@ -110,8 +146,8 @@ export default function Setup() {
         title="首次初始化已经完成"
         description="密码、订阅和基础入口都已经准备好。你可以直接进入总览继续使用，或者回到各页面做更细的整理。"
         action={
-          <Button onClick={() => navigate("/dashboard")}>
-            进入总览
+          <Button onClick={() => navigate(session?.authenticated ? "/dashboard" : "/login")}>
+            {session?.authenticated ? "进入总览" : "去登录"}
           </Button>
         }
       />
@@ -141,7 +177,7 @@ export default function Setup() {
           </CardHeader>
           <CardContent className="space-y-3">
             {setupState.checks.map((check) => (
-              <SetupCheckCard key={check.key} check={check} />
+              <SetupCheckCard key={check.key} check={check} passwordTarget={session?.authenticated ? "/system" : "/setup"} />
             ))}
           </CardContent>
         </Card>
@@ -182,8 +218,18 @@ export default function Setup() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
+              {setupState.needsPasswordReset ? (
+                <FieldBlock
+                  label="管理员账号"
+                  hint="首次初始化时，这就是你后续登录要使用的账号名。"
+                  htmlFor="setup-username"
+                  input={
+                    <Input id="setup-username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="admin" />
+                  }
+                />
+              ) : null}
               <FieldBlock
-                label="新密码"
+                label={setupState.needsPasswordReset ? "管理员密码" : "新密码"}
                 hint="建议至少 6 位。"
                 htmlFor="setup-password"
                 input={
@@ -200,7 +246,7 @@ export default function Setup() {
               />
             </div>
             <Button onClick={handleSavePassword} disabled={isSavingPassword}>
-              {isSavingPassword ? "保存中..." : "保存管理员密码"}
+              {isSavingPassword ? "保存中..." : setupState.needsPasswordReset ? "创建管理员账号" : "保存管理员密码"}
             </Button>
           </CardContent>
         </Card>
@@ -235,13 +281,16 @@ export default function Setup() {
               />
             </div>
             <div className="flex flex-wrap gap-3">
-              <Button onClick={handleAddSubscription} disabled={isSavingSubscription}>
+              <Button onClick={handleAddSubscription} disabled={isSavingSubscription || !session?.authenticated}>
                 {isSavingSubscription ? "添加中..." : "添加订阅"}
               </Button>
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" disabled={!session?.authenticated}>
                 <Link to="/subscriptions">去订阅与节点页</Link>
               </Button>
             </div>
+            {!session?.authenticated ? (
+              <p className="text-sm leading-6 text-zinc-500">先创建管理员账号并自动登录，后面才能继续添加订阅、线路和入口。</p>
+            ) : null}
           </CardContent>
         </Card>
       )}
@@ -252,17 +301,17 @@ export default function Setup() {
           <CardDescription>也可以直接进入下面的页面逐项设置。每个页面都保留了更详细的说明。</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
-          <QuickLinkCard title="订阅与节点" description="导入你的订阅链接，让可用节点进入系统。" icon={<Link2 className="h-5 w-5 text-zinc-500" />} to="/subscriptions" />
-          <QuickLinkCard title="出口线路" description="把节点整理成常用线路，例如香港、日本或自动选择。" icon={<Network className="h-5 w-5 text-zinc-500" />} to="/interfaces" />
-          <QuickLinkCard title="本地入口" description="创建浏览器和设备真正要连接的本地代理入口。" icon={<Radio className="h-5 w-5 text-zinc-500" />} to="/listeners" />
+          <QuickLinkCard title="订阅与节点" description="导入你的订阅链接，让可用节点进入系统。" icon={<Link2 className="h-5 w-5 text-zinc-500" />} to="/subscriptions" disabled={!session?.authenticated} />
+          <QuickLinkCard title="出口线路" description="把节点整理成常用线路，例如香港、日本或自动选择。" icon={<Network className="h-5 w-5 text-zinc-500" />} to="/interfaces" disabled={!session?.authenticated} />
+          <QuickLinkCard title="本地入口" description="创建浏览器和设备真正要连接的本地代理入口。" icon={<Radio className="h-5 w-5 text-zinc-500" />} to="/listeners" disabled={!session?.authenticated} />
         </CardContent>
       </Card>
     </div>
   )
 }
 
-function SetupCheckCard({ check }: { check: SetupStateResponse["checks"][number] }) {
-  const target = actionLinks[check.key as keyof typeof actionLinks]
+function SetupCheckCard({ check, passwordTarget }: { check: SetupStateResponse["checks"][number]; passwordTarget: string }) {
+  const target = check.key === "password" ? passwordTarget : actionLinks[check.key as keyof typeof actionLinks]
 
   return (
     <div className={`rounded-2xl border px-4 py-4 ${check.ready ? "border-emerald-200 bg-emerald-50/70" : "border-zinc-200 bg-white"}`}>
@@ -299,11 +348,11 @@ function QuickStep({ index, title, description }: { index: number; title: string
   )
 }
 
-function QuickLinkCard({ title, description, icon, to }: { title: string; description: string; icon: ReactNode; to: string }) {
+function QuickLinkCard({ title, description, icon, to, disabled = false }: { title: string; description: string; icon: ReactNode; to: string; disabled?: boolean }) {
   return (
     <Link
-      to={to}
-      className="group rounded-2xl border border-zinc-200 bg-white px-4 py-4 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+      to={disabled ? "/setup" : to}
+      className={`group rounded-2xl border border-zinc-200 bg-white px-4 py-4 transition-colors ${disabled ? "pointer-events-none opacity-50" : "hover:border-zinc-300 hover:bg-zinc-50"}`}
     >
       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50">
         {icon}

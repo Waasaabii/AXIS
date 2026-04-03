@@ -33,7 +33,7 @@ export default function AppLayout() {
 
   useEffect(() => {
     if (sessionError?.status === 401 || (session && !session.authenticated)) {
-      navigate('/login');
+      navigate('/launch', { replace: true });
     }
   }, [session, sessionError, navigate]);
 
@@ -41,7 +41,7 @@ export default function AppLayout() {
     if (!session?.authenticated || !setupState) {
       return;
     }
-    if (setupState.required && (location.pathname === '/' || location.pathname === '/dashboard')) {
+    if (setupState.needsPasswordReset && (location.pathname === '/' || location.pathname === '/dashboard')) {
       navigate('/setup', { replace: true });
       return;
     }
@@ -63,7 +63,7 @@ export default function AppLayout() {
   const handleLogout = async () => {
     try {
       await api.logout();
-      navigate('/login', { replace: true });
+      navigate('/launch', { replace: true });
     } catch {
       toast.error('退出登录失败');
     }

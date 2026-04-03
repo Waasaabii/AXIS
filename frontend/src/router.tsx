@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import AppLayout from './layouts/AppLayout';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Launch = lazy(() => import('./pages/Launch'));
 const Login = lazy(() => import('./pages/Login'));
 const Status = lazy(() => import('./pages/Status'));
 const Subscriptions = lazy(() => import('./pages/Subscriptions'));
@@ -31,24 +32,37 @@ function renderLazyPage(Component: LazyExoticComponent<ComponentType>) {
 
 const router = createBrowserRouter([
   {
+    path: '/',
+    element: <Navigate to="/launch" replace />,
+  },
+  {
+    path: '/launch',
+    element: renderLazyPage(Launch),
+  },
+  {
     path: '/login',
     element: renderLazyPage(Login),
   },
   {
-    path: '/',
+    path: '/setup',
+    element: renderLazyPage(Setup),
+  },
+  {
     element: <AppLayout />,
     children: [
-      { index: true, element: <Navigate to="/dashboard" replace /> },
-      { path: 'dashboard', element: renderLazyPage(Dashboard) },
-      { path: 'setup', element: renderLazyPage(Setup) },
-      { path: 'status', element: renderLazyPage(Status) },
-      { path: 'subscriptions', element: renderLazyPage(Subscriptions) },
-      { path: 'interfaces', element: renderLazyPage(Interfaces) },
-      { path: 'transits', element: renderLazyPage(TransitRoutes) },
-      { path: 'listeners', element: renderLazyPage(Listeners) },
-      { path: 'system', element: renderLazyPage(SystemConfig) },
-      { path: 'events', element: renderLazyPage(Events) },
+      { path: '/dashboard', element: renderLazyPage(Dashboard) },
+      { path: '/status', element: renderLazyPage(Status) },
+      { path: '/subscriptions', element: renderLazyPage(Subscriptions) },
+      { path: '/interfaces', element: renderLazyPage(Interfaces) },
+      { path: '/transits', element: renderLazyPage(TransitRoutes) },
+      { path: '/listeners', element: renderLazyPage(Listeners) },
+      { path: '/system', element: renderLazyPage(SystemConfig) },
+      { path: '/events', element: renderLazyPage(Events) },
     ],
+  },
+  {
+    path: '*',
+    element: <Navigate to="/launch" replace />,
   },
 ]);
 

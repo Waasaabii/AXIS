@@ -1,7 +1,8 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ShieldCheck, Sparkles } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
+import useSWR, { useSWRConfig } from "swr"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,53 +12,39 @@ import { api, ApiError } from "@/services/api"
 
 export default function Login() {
   const navigate = useNavigate()
+  const { mutate } = useSWRConfig()
+  const { data: session } = useSWR("/api/session", api.getSession)
+  const { data: bootstrap } = useSWR("/api/bootstrap/status", api.getBootstrapStatus)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [requiresReset, setRequiresReset] = useState(false)
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
+
+  useEffect(() => {
+    if (session?.authenticated) {
+      navigate("/launch", { replace: true })
+    }
+  }, [navigate, session])
+
+  useEffect(() => {
+    if (bootstrap?.setup?.needsPasswordReset) {
+      navigate("/setup", { replace: true })
+    }
+  }, [bootstrap?.setup?.needsPasswordReset, navigate])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
     try {
-      const data = await api.login({ username, password })
-
-      if (data.requiresPasswordReset) {
-        setRequiresReset(true)
-        return
-      }
-
+      await api.login({ username, password })
+      await Promise.all([
+        mutate("/api/session"),
+        mutate("/api/bootstrap/status"),
+      ])
       toast.success("登录成功。")
-      navigate(data.setupRequired ? "/setup" : "/dashboard", { replace: true })
+      navigate("/launch", { replace: true })
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "登录失败，请检查账号和密码。")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (newPassword !== confirmPassword) {
-      toast.error("两次输入的密码不一致。")
-      return
-    }
-    if (newPassword.length < 6) {
-      toast.error("密码至少需要 6 位。")
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      await api.updatePassword({ password: newPassword })
-
-      toast.success("密码已经更新。")
-      navigate("/setup", { replace: true })
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "修改失败，请稍后再试。")
     } finally {
       setIsLoading(false)
     }
@@ -93,81 +80,43 @@ export default function Login() {
 
         <Card className="w-full rounded-[2rem] border-white/80 bg-white/88 shadow-[0_30px_80px_-40px_rgba(24,24,27,0.4)] backdrop-blur">
           <CardHeader className="space-y-2 px-8 pt-8 text-left">
-            <CardTitle className="text-3xl font-semibold tracking-tight text-zinc-950">
-              {requiresReset ? "先更新管理员密码" : "登录 AXIS"}
-            </CardTitle>
+            <CardTitle className="text-3xl font-semibold tracking-tight text-zinc-950">登录 AXIS</CardTitle>
             <CardDescription className="text-sm leading-6 text-zinc-600">
-              {requiresReset
-                ? "系统检测到你还在使用默认凭据。先换成自己的密码，再继续进入初始化流程。"
-                : "输入管理员账号和密码，进入控制台继续配置或管理。"}
+              输入已经初始化完成的管理员账号和密码。若当前还没创建管理员账号，AXIS 会直接把你送回 Setup 页先完成首次初始化。
             </CardDescription>
           </CardHeader>
           <CardContent className="px-8 pb-8">
-            {!requiresReset ? (
-              <form onSubmit={handleLogin} className="space-y-5">
-                <FieldBlock
-                  label="用户名"
-                  input={
-                    <Input
-                      id="username"
-                      type="text"
-                      value={username}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
-                      placeholder="输入管理员用户名"
-                      required
-                    />
-                  }
-                />
-                <FieldBlock
-                  label="密码"
-                  input={
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                      placeholder="输入管理员密码"
-                      required
-                    />
-                  }
-                />
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "登录中..." : "进入控制台"}
-                </Button>
-              </form>
-            ) : (
-              <form onSubmit={handleResetPassword} className="space-y-5">
-                <FieldBlock
-                  label="新密码"
-                  input={
-                    <Input
-                      id="new-password"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
-                      placeholder="至少 6 位"
-                      required
-                    />
-                  }
-                />
-                <FieldBlock
-                  label="确认新密码"
-                  input={
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
-                      placeholder="再输入一次"
-                      required
-                    />
-                  }
-                />
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "更新中..." : "保存密码并继续"}
-                </Button>
-              </form>
-            )}
+            <form onSubmit={handleLogin} className="space-y-5">
+              <FieldBlock
+                label="用户名"
+                input={
+                  <Input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
+                    placeholder="输入管理员用户名"
+                    required
+                  />
+                }
+              />
+              <FieldBlock
+                label="密码"
+                input={
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                    placeholder="输入管理员密码"
+                    required
+                  />
+                }
+              />
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "登录中..." : "继续"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>
