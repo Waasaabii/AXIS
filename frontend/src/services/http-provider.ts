@@ -40,6 +40,7 @@ import type {
   UpdateEgressGroupRequest,
   UpdateListenerRequest,
   UpdatePasswordRequest,
+  UpdateSubscriptionRequest,
   UpdateTransitRouteRequest,
 } from "./provider-types"
 import { ApiError } from "./provider-types"
@@ -113,6 +114,7 @@ export const httpAPI: AxisAPI = {
   probeController: () => requestJson<ProbeControllerResponse>("/api/controller/probe", { method: "POST" }),
   reloadRuntime: () => requestJson<ReloadResponse>("/api/reload", { method: "POST" }),
   addSubscription: (body: AddSubscriptionRequest) => requestJson<SaveConfigResponse>("/api/subscriptions", { method: "POST", body: JSON.stringify(body) }),
+  updateSubscription: (name: string, body: UpdateSubscriptionRequest) => requestJson<SaveConfigResponse>(`/api/subscriptions/${encodeURIComponent(name)}/update`, { method: "PUT", body: JSON.stringify(body) }),
   toggleSubscription: (name: string, body: ToggleSubscriptionRequest) => requestJson<SaveConfigResponse>(`/api/subscriptions/${encodeURIComponent(name)}/toggle`, { method: "POST", body: JSON.stringify(body) }),
   deleteSubscription: (name: string) => requestJson<SaveConfigResponse>(`/api/subscriptions/${encodeURIComponent(name)}`, { method: "DELETE" }),
   addEgressGroup: (body: AddEgressGroupRequest) => requestJson<SaveConfigResponse>("/api/egress-groups", { method: "POST", body: JSON.stringify(body) }),

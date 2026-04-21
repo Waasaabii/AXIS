@@ -2,7 +2,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { Cable, Link2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Cable, Link2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -52,7 +52,7 @@ const emptyManualForm = {
 
 export default function Subscriptions() {
   const { data: providers, mutate: mutateProviders } = useSWR('/api/providers', api.getProviders)
-  const { mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
+  const { data: configData, mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
 
   const [showAddSub, setShowAddSub] = useState(false)
   const [showAddManualNode, setShowAddManualNode] = useState(false)
@@ -60,10 +60,45 @@ export default function Subscriptions() {
   const [manualForm, setManualForm] = useState({ ...emptyManualForm })
   const [addingSubscription, setAddingSubscription] = useState(false)
   const [addingManualNode, setAddingManualNode] = useState(false)
+  const [editingManualNodeName, setEditingManualNodeName] = useState<string | null>(null)
   const [pendingDeleteName, setPendingDeleteName] = useState<string | null>(null)
   const [deletingSubscription, setDeletingSubscription] = useState(false)
 
   const mutateAll = () => { mutateProviders(); mutateConfig() }
+
+  const resetManualForm = () => {
+    setManualForm({ ...emptyManualForm })
+    setEditingManualNodeName(null)
+  }
+
+  const openAddManualNodeDialog = () => {
+    resetManualForm()
+    setShowAddManualNode(true)
+  }
+
+  const openEditManualNodeDialog = (provider: ProviderListItem) => {
+    const subscription = configData?.config.subscriptions.find((item) => item.name === provider.name)
+    if (!subscription) {
+      toast.error('还没拿到这条单节点的完整配置，请稍后再试。')
+      return
+    }
+    setEditingManualNodeName(provider.name)
+    setManualForm({
+      importText: '',
+      name: subscription.name || '',
+      type: subscription.type || 'socks5',
+      server: subscription.server || '',
+      port: subscription.port ? String(subscription.port) : '',
+      username: subscription.username || '',
+      password: subscription.password || '',
+    })
+    setShowAddManualNode(true)
+  }
+
+  const closeManualNodeDialog = () => {
+    setShowAddManualNode(false)
+    resetManualForm()
+  }
 
   const handleRefreshProvider = async (name: string) => {
     try {
@@ -115,7 +150,7 @@ export default function Subscriptions() {
     }
   }
 
-  const handleAddManualNode = async () => {
+  const handleSaveManualNode = async () => {
     if (!manualForm.importText.trim() && (!manualForm.server.trim() || !manualForm.port)) {
       toast.error('请填写导入串，或至少填写节点地址和端口。')
       return
@@ -123,7 +158,7 @@ export default function Subscriptions() {
 
     setAddingManualNode(true)
     try {
-      const data = await api.addSubscription({
+      const payload = {
         name: manualForm.name.trim() || undefined,
         type: manualForm.type,
         import_text: manualForm.importText.trim() || undefined,
@@ -132,14 +167,16 @@ export default function Subscriptions() {
         username: manualForm.username.trim() || undefined,
         password: manualForm.password || undefined,
         interval: 3600,
-      })
-      if (!data.ok) throw new Error('导入失败')
+      }
+      const data = editingManualNodeName
+        ? await api.updateSubscription(editingManualNodeName, payload)
+        : await api.addSubscription(payload)
+      if (!data.ok) throw new Error(editingManualNodeName ? '保存失败' : '导入失败')
       mutateAll()
-      setShowAddManualNode(false)
-      setManualForm({ ...emptyManualForm })
-      toast.success('单节点已导入，可以直接拿去编排出口线路。')
+      closeManualNodeDialog()
+      toast.success(editingManualNodeName ? '单节点已更新，相关引用也已经同步。' : '单节点已导入，可以直接拿去编排出口线路。')
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '导入节点失败，请检查输入后重试。')
+      toast.error(err instanceof ApiError ? err.message : editingManualNodeName ? '保存节点失败，请检查输入后重试。' : '导入节点失败，请检查输入后重试。')
     } finally {
       setAddingManualNode(false)
     }
@@ -169,7 +206,7 @@ export default function Subscriptions() {
         description="这里统一管理远程订阅和手动录入的单节点。导入完成后，后面的出口线路和本地入口都直接复用这里的代理源。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => setShowAddManualNode(true)}>
+            <Button variant="outline" onClick={openAddManualNodeDialog}>
               <Cable className="h-4 w-4" />
               导入单节点
             </Button>
@@ -196,7 +233,7 @@ export default function Subscriptions() {
           description="你可以添加一个远程订阅，也可以先录入一个固定的 HTTP / SOCKS / SOCKS5 单节点。"
           action={
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={() => setShowAddManualNode(true)}>
+              <Button variant="outline" onClick={openAddManualNodeDialog}>
                 <Cable className="h-4 w-4" />
                 导入单节点
               </Button>
@@ -254,6 +291,12 @@ export default function Subscriptions() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
+                    {manual && (
+                      <Button variant="outline" size="sm" onClick={() => openEditManualNodeDialog(provider)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        编辑节点
+                      </Button>
+                    )}
                     {!manual && (
                       <Button variant="outline" size="sm" onClick={() => handleRefreshProvider(provider.name)} disabled={!provider.enabled}>
                         <RefreshCw className="h-3.5 w-3.5" />
@@ -320,15 +363,16 @@ export default function Subscriptions() {
       </Dialog>
 
       <Dialog open={showAddManualNode} onOpenChange={(open) => {
-        setShowAddManualNode(open)
-        if (!open) {
-          setManualForm({ ...emptyManualForm })
+        if (open) {
+          setShowAddManualNode(true)
+          return
         }
+        closeManualNodeDialog()
       }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>导入一个固定单节点</DialogTitle>
-            <DialogDescription>支持 HTTP / SOCKS / SOCKS5。你可以直接贴导入串，也可以手动填写协议、地址、端口和认证信息。</DialogDescription>
+            <DialogTitle>{editingManualNodeName ? `编辑单节点：${editingManualNodeName}` : '导入一个固定单节点'}</DialogTitle>
+            <DialogDescription>{editingManualNodeName ? '支持直接改名称、协议、地址、端口和认证信息。保存后，相关出口线路和中转引用会一起同步。' : '支持 HTTP / SOCKS / SOCKS5。你可以直接贴导入串，也可以手动填写协议、地址、端口和认证信息。'}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <FieldBlock
@@ -381,9 +425,9 @@ export default function Subscriptions() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddManualNode(false)}>取消</Button>
-            <Button onClick={handleAddManualNode} disabled={addingManualNode}>
-              {addingManualNode ? '导入中...' : '导入节点'}
+            <Button variant="outline" onClick={closeManualNodeDialog}>取消</Button>
+            <Button onClick={handleSaveManualNode} disabled={addingManualNode}>
+              {addingManualNode ? (editingManualNodeName ? '保存中...' : '导入中...') : (editingManualNodeName ? '保存修改' : '导入节点')}
             </Button>
           </DialogFooter>
         </DialogContent>

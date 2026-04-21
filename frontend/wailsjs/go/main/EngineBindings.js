@@ -158,6 +158,10 @@ export function ToggleSubscription(arg1, arg2) {
   return window['go']['main']['EngineBindings']['ToggleSubscription'](arg1, arg2);
 }
 
+export function UpdateSubscription(arg1, arg2) {
+  return window['go']['main']['EngineBindings']['UpdateSubscription'](arg1, arg2);
+}
+
 export function UpdateEgressGroup(arg1, arg2) {
   return window['go']['main']['EngineBindings']['UpdateEgressGroup'](arg1, arg2);
 }

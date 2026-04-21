@@ -40,6 +40,7 @@ import type {
   UpdateEgressGroupRequest,
   UpdateListenerRequest,
   UpdatePasswordRequest,
+  UpdateSubscriptionRequest,
   UpdateTransitRouteRequest,
 } from "./provider-types"
 import { ApiError } from "./provider-types"
@@ -115,6 +116,7 @@ export const wailsAPI: AxisAPI = {
   probeController: () => callBinding<ProbeControllerResponse>("EngineBindings", "ProbeController"),
   reloadRuntime: () => callBinding<ReloadResponse>("EngineBindings", "ReloadRuntime"),
   addSubscription: (body: AddSubscriptionRequest) => callBinding<SaveConfigResponse>("EngineBindings", "AddSubscription", body),
+  updateSubscription: (name: string, body: UpdateSubscriptionRequest) => callBinding<SaveConfigResponse>("EngineBindings", "UpdateSubscription", name, body),
   toggleSubscription: (name: string, body: ToggleSubscriptionRequest) => callBinding<SaveConfigResponse>("EngineBindings", "ToggleSubscription", name, body),
   deleteSubscription: (name: string) => callBinding<SaveConfigResponse>("EngineBindings", "DeleteSubscription", name),
   addEgressGroup: (body: AddEgressGroupRequest) => callBinding<SaveConfigResponse>("EngineBindings", "AddEgressGroup", body),

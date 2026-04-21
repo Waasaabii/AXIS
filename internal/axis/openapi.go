@@ -841,6 +841,23 @@ func BuildOpenAPISpec() map[string]any {
 				"health_check_interval": map[string]any{"type": "integer"},
 			},
 		},
+		"UpdateSubscriptionRequest": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"name":                  map[string]any{"type": "string"},
+				"url":                   map[string]any{"type": "string"},
+				"server":                map[string]any{"type": "string"},
+				"port":                  map[string]any{"type": "integer"},
+				"username":              map[string]any{"type": "string"},
+				"password":              map[string]any{"type": "string"},
+				"import_text":           map[string]any{"type": "string"},
+				"type":                  map[string]any{"type": "string"},
+				"interval":              map[string]any{"type": "integer"},
+				"enabled":               map[string]any{"type": "boolean"},
+				"health_check_url":      map[string]any{"type": "string"},
+				"health_check_interval": map[string]any{"type": "integer"},
+			},
+		},
 		"AddEgressGroupRequest": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -1350,6 +1367,14 @@ func BuildOpenAPISpec() map[string]any {
 				"summary":     "启停订阅",
 				"parameters":  []map[string]any{pathParam("name", "订阅名称")},
 				"requestBody": jsonBody(schemaRef("ToggleSubscriptionRequest")),
+				"responses":   mutationErrorResponsesWith200("保存结果", "SaveConfigResponse"),
+			},
+		},
+		"/api/subscriptions/{name}/update": map[string]any{
+			"put": map[string]any{
+				"summary":     "更新订阅或手动节点",
+				"parameters":  []map[string]any{pathParam("name", "订阅名称")},
+				"requestBody": jsonBody(schemaRef("UpdateSubscriptionRequest")),
 				"responses":   mutationErrorResponsesWith200("保存结果", "SaveConfigResponse"),
 			},
 		},

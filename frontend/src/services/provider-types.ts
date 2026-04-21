@@ -37,6 +37,7 @@ export type UpdateListenerRequest = Schemas["UpdateListenerRequest"]
 export type EventEntry = Schemas["EventEntry"]
 export type RenderedConfigResponse = Schemas["RenderedConfigResponse"]
 export type AddSubscriptionRequest = Schemas["AddSubscriptionRequest"]
+export type UpdateSubscriptionRequest = Schemas["UpdateSubscriptionRequest"]
 export type ToggleSubscriptionRequest = Schemas["ToggleSubscriptionRequest"]
 export type AddEgressGroupRequest = Schemas["AddEgressGroupRequest"]
 export type UpdateEgressGroupRequest = Schemas["UpdateEgressGroupRequest"]
@@ -97,6 +98,7 @@ export interface AxisAPI {
   probeController: () => Promise<ProbeControllerResponse>
   reloadRuntime: () => Promise<ReloadResponse>
   addSubscription: (body: AddSubscriptionRequest) => Promise<SaveConfigResponse>
+  updateSubscription: (name: string, body: UpdateSubscriptionRequest) => Promise<SaveConfigResponse>
   toggleSubscription: (name: string, body: ToggleSubscriptionRequest) => Promise<SaveConfigResponse>
   deleteSubscription: (name: string) => Promise<SaveConfigResponse>
   addEgressGroup: (body: AddEgressGroupRequest) => Promise<SaveConfigResponse>

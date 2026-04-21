@@ -2308,6 +2308,47 @@
         ],
         "type": "object"
       },
+      "UpdateSubscriptionRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "health_check_interval": {
+            "type": "integer"
+          },
+          "health_check_url": {
+            "type": "string"
+          },
+          "import_text": {
+            "type": "string"
+          },
+          "interval": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "server": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "UpdateTransitRouteRequest": {
         "properties": {
           "egress_group": {
@@ -4570,6 +4611,84 @@
           }
         },
         "summary": "启停订阅"
+      }
+    },
+    "/api/subscriptions/{name}/update": {
+      "put": {
+        "parameters": [
+          {
+            "description": "订阅名称",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "更新订阅或手动节点"
       }
     },
     "/api/transit-routes": {

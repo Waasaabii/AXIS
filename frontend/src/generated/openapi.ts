@@ -2668,6 +2668,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/subscriptions/{name}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新订阅或手动节点 */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 订阅名称 */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateSubscriptionRequest"];
+                };
+            };
+            responses: {
+                /** @description 保存结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SaveConfigResponse"];
+                    };
+                };
+                /** @description 请求参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 未登录或会话已过期 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 目标不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description 服务端错误 */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transit-routes": {
         parameters: {
             query?: never;
@@ -3622,6 +3701,20 @@ export interface components {
         };
         UpdatePasswordRequest: {
             password: string;
+        };
+        UpdateSubscriptionRequest: {
+            enabled?: boolean;
+            health_check_interval?: number;
+            health_check_url?: string;
+            import_text?: string;
+            interval?: number;
+            name?: string;
+            password?: string;
+            port?: number;
+            server?: string;
+            type?: string;
+            url?: string;
+            username?: string;
         };
         UpdateTransitRouteRequest: {
             egress_group?: string;
