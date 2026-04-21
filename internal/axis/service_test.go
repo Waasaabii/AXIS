@@ -203,6 +203,114 @@ func TestAddManualSubscriptionGeneratesProviderFileAndSnapshot(t *testing.T) {
 	}
 }
 
+func TestUpdateManualSubscriptionRenamesAndSyncsReferences(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir)
+	service, err := NewService(configPath)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	defer service.Close()
+
+	response, status := service.AddSubscription(map[string]any{
+		"name":     "tokyo-fixed",
+		"type":     "socks5",
+		"server":   "1.1.1.1",
+		"port":     1080,
+		"username": "user",
+		"password": "pass",
+	})
+	if status != 200 || response["ok"] != true {
+		t.Fatalf("AddSubscription() status = %d response = %#v", status, response)
+	}
+
+	response, status = service.AddEgressGroup(map[string]any{
+		"name":     "egress-fixed",
+		"provider": "tokyo-fixed",
+		"mode":     "manual",
+	})
+	if status != 200 || response["ok"] != true {
+		t.Fatalf("AddEgressGroup() status = %d response = %#v", status, response)
+	}
+
+	response, status = service.AddTransitRoute(map[string]any{
+		"name":                "fixed-transit",
+		"upstream_provider":   "tokyo-fixed",
+		"upstream_proxy_name": "tokyo-fixed",
+		"egress_group":        "egress-fixed",
+		"enabled":             true,
+	})
+	if status != 200 || response["ok"] != true {
+		t.Fatalf("AddTransitRoute() status = %d response = %#v", status, response)
+	}
+	service.state.GroupSelections["egress-fixed"] = "tokyo-fixed"
+
+	response, status = service.UpdateSubscription("tokyo-fixed", map[string]any{
+		"name":     "osaka-fixed",
+		"server":   "2.2.2.2",
+		"port":     2080,
+		"username": "next-user",
+		"password": "next-pass",
+	})
+	if status != 200 || response["ok"] != true {
+		t.Fatalf("UpdateSubscription() status = %d response = %#v", status, response)
+	}
+
+	if service.config.Subscriptions[1].Name != "osaka-fixed" || service.config.Subscriptions[1].Server != "2.2.2.2" || service.config.Subscriptions[1].Port != 2080 {
+		t.Fatalf("unexpected updated subscription: %#v", service.config.Subscriptions[1])
+	}
+	if service.config.EgressGroups[1].Provider != "osaka-fixed" {
+		t.Fatalf("expected egress group provider to be renamed, got %#v", service.config.EgressGroups[1])
+	}
+	if service.state.GroupSelections["egress-fixed"] != "osaka-fixed" {
+		t.Fatalf("expected group selection to be renamed, got %q", service.state.GroupSelections["egress-fixed"])
+	}
+	if service.config.TransitRoutes[0].UpstreamProvider != "osaka-fixed" || service.config.TransitRoutes[0].UpstreamProxyName != "osaka-fixed" {
+		t.Fatalf("unexpected transit route after rename: %#v", service.config.TransitRoutes[0])
+	}
+
+	if _, exists := service.state.Providers["tokyo-fixed"]; exists {
+		t.Fatalf("old provider state should be removed: %#v", service.state.Providers["tokyo-fixed"])
+	}
+	record := service.getProviderRecord("osaka-fixed")
+	if record.NodeCount != 1 || len(record.Nodes) != 1 || record.Nodes[0].Name != "osaka-fixed" {
+		t.Fatalf("unexpected renamed provider snapshot: %#v", record)
+	}
+
+	oldFile := filepath.Join(service.layout.ProvidersDir, "tokyo-fixed.yaml")
+	if _, err := os.Stat(oldFile); !os.IsNotExist(err) {
+		t.Fatalf("expected old provider file to be removed, stat err = %v", err)
+	}
+	newFile := filepath.Join(service.layout.ProvidersDir, "osaka-fixed.yaml")
+	raw, err := os.ReadFile(newFile)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !strings.Contains(string(raw), "server: 2.2.2.2") || !strings.Contains(string(raw), "username: next-user") {
+		t.Fatalf("unexpected renamed manual provider file:\n%s", string(raw))
+	}
+}
+
+func TestUpdateSubscriptionRejectsRemoteProvider(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir)
+	service, err := NewService(configPath)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	defer service.Close()
+
+	response, status := service.UpdateSubscription("airport-main", map[string]any{
+		"name": "airport-2",
+	})
+	if status != 400 {
+		t.Fatalf("UpdateSubscription() status = %d response = %#v", status, response)
+	}
+	if !strings.Contains(stringValue(response["error"]), "只支持编辑手动节点") {
+		t.Fatalf("unexpected error: %#v", response)
+	}
+}
+
 func TestAddFallbackGroupStoresProxyOrder(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir)

@@ -344,6 +344,15 @@ func (f *EngineFacade) AddSubscription(payload map[string]any) (map[string]any, 
 	return result, status, nil
 }
 
+func (f *EngineFacade) UpdateSubscription(name string, payload map[string]any) (map[string]any, int, error) {
+	service, err := f.serviceOrError()
+	if err != nil {
+		return nil, 500, err
+	}
+	result, status := service.UpdateSubscription(name, payload)
+	return result, status, nil
+}
+
 func (f *EngineFacade) ToggleSubscription(name string, enabled bool) (map[string]any, int, error) {
 	service, err := f.serviceOrError()
 	if err != nil {

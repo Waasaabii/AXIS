@@ -473,6 +473,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, status, response)
 			return
 		}
+		if strings.HasPrefix(pathname, "/api/subscriptions/") && strings.HasSuffix(pathname, "/update") && method == http.MethodPut {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/subscriptions/"), "/update")
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.UpdateSubscription(name, payload)
+			writeJSON(w, status, response)
+			return
+		}
 		if strings.HasPrefix(pathname, "/api/subscriptions/") && method == http.MethodDelete {
 			name := strings.TrimPrefix(pathname, "/api/subscriptions/")
 			response, status := s.service.RemoveSubscription(name)

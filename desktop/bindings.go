@@ -384,6 +384,17 @@ func (e *EngineBindings) AddSubscription(payload map[string]any) (map[string]any
 	return result, nil
 }
 
+func (e *EngineBindings) UpdateSubscription(name string, payload map[string]any) (map[string]any, error) {
+	result, status, err := e.engine.UpdateSubscription(name, payload)
+	if err != nil {
+		return nil, err
+	}
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (e *EngineBindings) ToggleSubscription(name string, payload map[string]any) (map[string]any, error) {
 	result, status, err := e.engine.ToggleSubscription(name, payloadBool(payload, "enabled"))
 	if err != nil {
