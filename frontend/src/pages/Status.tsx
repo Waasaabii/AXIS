@@ -1,5 +1,6 @@
 import useSWR from 'swr'
-import { api, ApiError } from '@/services/api'
+import { api } from '@/services/api'
+import { apiKeys } from '@/services/api-keys'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { NoticeCard } from '@/components/NoticeCard'
@@ -8,6 +9,7 @@ import { toast } from 'sonner'
 import { CheckCircle2, AlertTriangle, XCircle, RefreshCw } from 'lucide-react'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
+import { toastApiError } from '@/lib/toast-api-error'
 
 function formatMode(mode?: string, renderOnly?: boolean) {
   const currentMode = mode || (renderOnly ? 'render-only' : 'managed')
@@ -15,8 +17,8 @@ function formatMode(mode?: string, renderOnly?: boolean) {
 }
 
 export default function Status() {
-  const { data: controller, mutate: mutateController } = useSWR('/api/controller', api.getController)
-  const { data: preflight, mutate: mutatePreflight } = useSWR('/api/runtime-preflight', api.getRuntimePreflight)
+  const { data: controller, mutate: mutateController } = useSWR(apiKeys.controller, api.getController)
+  const { data: preflight, mutate: mutatePreflight } = useSWR(apiKeys.runtimePreflight, api.getRuntimePreflight)
 
   const handleProbe = async () => {
     try {
@@ -24,7 +26,7 @@ export default function Status() {
       mutateController()
       toast.success('检测完成')
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '检测失败')
+      toastApiError(err, '检测失败')
     }
   }
 
@@ -37,14 +39,14 @@ export default function Status() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Runtime"
-        title="先看系统能不能真正跑起来"
-        description="这里主要回答两个问题：AXIS 有没有连上 Mihomo，以及当前目录、配置和运行环境是否已经准备好。"
+        title="先看系统能不能跑起来"
+        description="这里主要看两件事：代理核心是否连上，运行环境是否就绪。"
       />
 
       <NoticeCard
         icon={<AlertTriangle className="h-4 w-4" />}
-        title="什么时候需要来这个页面"
-        description="如果你发现节点刷新不了、入口连不上、配置改完不生效，优先先看这里。大多数环境和运行问题都能在这个页面先定位到。"
+        title="什么时候需要看这里"
+        description="节点刷不出、本地代理连不上、改了不生效，先看这里。"
       />
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -53,7 +55,7 @@ export default function Status() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
               <CardTitle>代理核心连接</CardTitle>
-              <CardDescription>确认 AXIS 现在能不能接管代理核心</CardDescription>
+              <CardDescription>确认代理核心是否已连上</CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={handleProbe}>
               重新检测
@@ -101,7 +103,7 @@ export default function Status() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
               <CardTitle>使用前检查</CardTitle>
-              <CardDescription>确认目录、配置和代理核心状态是否已经准备好</CardDescription>
+              <CardDescription>检查目录、配置是否就绪</CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={handleRefreshPreflight}>
               <RefreshCw className="h-4 w-4 mr-2" />

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, ApiError, type BootstrapStatus } from '@/services/api'
+import { apiKeys } from '@/services/api-keys'
 
 function nextPath(nextStep?: string) {
   switch (nextStep) {
@@ -35,7 +36,7 @@ function nextLabel(nextStep?: string) {
 
 export default function Launch() {
   const navigate = useNavigate()
-  const { data, error, isLoading, mutate } = useSWR<BootstrapStatus, ApiError>('/api/bootstrap/status', api.getBootstrapStatus, {
+  const { data, error, isLoading, mutate } = useSWR<BootstrapStatus, ApiError>(apiKeys.bootstrapStatus, api.getBootstrapStatus, {
     refreshInterval: 3000,
   })
 
@@ -62,15 +63,15 @@ export default function Launch() {
           icon: <Cpu className="h-4 w-4" />,
         },
         {
-          title: '宿主模式',
+          title: '运行形态',
           value: data.host.desktopMode ? '桌面宿主' : 'Web 服务',
-          description: data.host.desktopMode ? '当前通过 Wails 桌面壳运行。' : '当前通过 HTTP 服务模式运行。',
+          description: data.host.desktopMode ? '当前为桌面版。' : '当前为 Web 服务。',
           icon: <MonitorSmartphone className="h-4 w-4" />,
         },
         {
           title: '登录状态',
           value: data.auth.authenticated ? '已登录' : '未登录',
-          description: data.auth.authenticated ? '会话已经建立，可以直接进入下一步。' : data.setup.needsPasswordReset ? '当前还没完成首次初始化，下一步会先进入 Setup 创建管理员账号。' : '还没有有效会话，下一步会先进入登录页。',
+          description: data.auth.authenticated ? '已登录，可以继续。' : data.setup.needsPasswordReset ? '还没初始化，会先去创建管理员账号。' : '未登录，会先去登录。',
           icon: <LockKeyhole className="h-4 w-4" />,
         },
         {
@@ -134,14 +135,14 @@ export default function Launch() {
                   : data?.blockingReason
                     ? data.blockingReason
                     : data?.nextStep === 'setup' && !data.auth.authenticated
-                      ? '当前还没创建管理员账号和密码，会先进入 Setup 完成首次初始化。'
+                      ? '还没创建管理员账号和密码，会先进入首次初始化。'
                     : data?.nextStep === 'login'
                       ? '先建立管理员会话，再继续后面的初始化或管理动作。'
                     : data?.nextStep === 'setup'
-                        ? '当前还没创建管理员账号和密码，会先进入 Setup 完成首次初始化。'
+                        ? '还没创建管理员账号和密码，会先进入首次初始化。'
                         : data?.nextStep === 'dashboard'
                           ? data?.setup.required
-                            ? '管理员账号已经准备好，可以先进入控制台；订阅、线路和入口仍会在控制台内继续提示你补齐。'
+                            ? '管理员账号已准备好，可以先进入控制台；订阅、线路和本地代理仍会继续提示你补齐。'
                             : '登录态和初始化检查都通过了，可以直接进入控制台。'
                           : '正在读取启动状态。'}
               </p>

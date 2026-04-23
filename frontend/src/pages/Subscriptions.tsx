@@ -16,7 +16,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from '@/components/ui/switch'
-import { api, ApiError, type ProviderListItem } from '@/services/api'
+import { api, type ProviderListItem } from '@/services/api'
+import { apiKeys } from '@/services/api-keys'
+import { mutateMany } from '@/lib/swr'
+import { toastApiError } from '@/lib/toast-api-error'
 
 function formatSubscriptionType(type: string) {
   switch (type) {
@@ -51,8 +54,8 @@ const emptyManualForm = {
 }
 
 export default function Subscriptions() {
-  const { data: providers, mutate: mutateProviders } = useSWR('/api/providers', api.getProviders)
-  const { data: configData, mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
+  const { data: providers, mutate: mutateProviders } = useSWR(apiKeys.providers, api.getProviders)
+  const { data: configData, mutate: mutateConfig } = useSWR(apiKeys.config, api.getConfig)
 
   const [showAddSub, setShowAddSub] = useState(false)
   const [showAddManualNode, setShowAddManualNode] = useState(false)
@@ -64,7 +67,7 @@ export default function Subscriptions() {
   const [pendingDeleteName, setPendingDeleteName] = useState<string | null>(null)
   const [deletingSubscription, setDeletingSubscription] = useState(false)
 
-  const mutateAll = () => { mutateProviders(); mutateConfig() }
+  const mutateAll = () => void mutateMany(mutateProviders, mutateConfig)
 
   const resetManualForm = () => {
     setManualForm({ ...emptyManualForm })
@@ -110,7 +113,7 @@ export default function Subscriptions() {
         toast.error(`刷新没有完成：${data.error || '请稍后再试。'}`)
       }
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '刷新失败，请稍后再试。')
+      toastApiError(err, '刷新失败，请稍后再试。')
     }
   }
 
@@ -121,7 +124,7 @@ export default function Subscriptions() {
       mutateAll()
       toast.success(enabled ? `“${provider.name}”已恢复启用。` : `“${provider.name}”已暂停使用。`)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '操作失败，请稍后再试。')
+      toastApiError(err, '操作失败，请稍后再试。')
     }
   }
 
@@ -144,7 +147,7 @@ export default function Subscriptions() {
       setSubForm({ ...emptyRemoteForm })
       toast.success('订阅已经添加，AXIS 会开始拉取节点。')
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '添加订阅失败，请检查链接后重试。')
+      toastApiError(err, '添加订阅失败，请检查链接后重试。')
     } finally {
       setAddingSubscription(false)
     }
@@ -176,7 +179,7 @@ export default function Subscriptions() {
       closeManualNodeDialog()
       toast.success(editingManualNodeName ? '单节点已更新，相关引用也已经同步。' : '单节点已导入，可以直接拿去编排出口线路。')
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : editingManualNodeName ? '保存节点失败，请检查输入后重试。' : '导入节点失败，请检查输入后重试。')
+      toastApiError(err, editingManualNodeName ? '保存节点失败，请检查输入后重试。' : '导入节点失败，请检查输入后重试。')
     } finally {
       setAddingManualNode(false)
     }
@@ -192,7 +195,7 @@ export default function Subscriptions() {
       toast.success(`“${pendingDeleteName}”已删除。`)
       setPendingDeleteName(null)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '删除订阅失败，请稍后再试。')
+      toastApiError(err, '删除订阅失败，请稍后再试。')
     } finally {
       setDeletingSubscription(false)
     }
@@ -202,8 +205,8 @@ export default function Subscriptions() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Subscriptions"
-        title="先把你的节点带进来"
-        description="这里统一管理远程订阅和手动录入的单节点。导入完成后，后面的出口线路和本地入口都直接复用这里的代理源。"
+        title="先把节点导入进来"
+        description="这里统一管理订阅和单节点。后面的出口线路和本地代理都从这里选。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={openAddManualNodeDialog}>
@@ -220,17 +223,17 @@ export default function Subscriptions() {
 
       <NoticeCard
         icon={<Link2 className="h-4 w-4" />}
-        title="远程订阅和单节点怎么选"
-        description="有机场订阅链接时优先用远程订阅；没有订阅、只有一条固定上游时，就在这里手动导入单节点。两者最终都会变成可复用的代理源。"
+        title="订阅还是单节点？"
+        description="有订阅就添加订阅；只有一条固定上游就导入单节点。"
       />
 
       {!providers ? (
-        <div className="text-sm text-zinc-500">正在读取代理源列表...</div>
+        <div className="text-sm text-zinc-500">正在读取节点来源列表...</div>
       ) : providers.length === 0 ? (
         <EmptyStateCard
           icon={<Link2 className="h-5 w-5" />}
-          title="还没有任何代理源"
-          description="你可以添加一个远程订阅，也可以先录入一个固定的 HTTP / SOCKS / SOCKS5 单节点。"
+          title="还没有任何节点来源"
+          description="可以添加订阅，或先导入一个固定单节点（HTTP / SOCKS / SOCKS5）。"
           action={
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={openAddManualNodeDialog}>
@@ -438,8 +441,8 @@ export default function Subscriptions() {
         onOpenChange={(open) => {
           if (!open) setPendingDeleteName(null)
         }}
-        title="删除这个代理源后会发生什么？"
-        description={pendingDeleteName ? `“${pendingDeleteName}”删除后，相关出口线路和本地入口不会一起被删，但它们会暂时失去可用节点，需要你重新绑定或补上新的代理源。` : ''}
+        title="删除这个节点来源后会发生什么？"
+        description={pendingDeleteName ? `“${pendingDeleteName}”删除后，相关出口线路和本地代理不会一起被删，但会暂时失去可用节点，需要你重新选择来源。` : ''}
         confirmLabel="确认删除"
         destructive
         confirming={deletingSubscription}

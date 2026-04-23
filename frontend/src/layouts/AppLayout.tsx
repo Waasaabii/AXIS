@@ -4,19 +4,21 @@ import { LayoutDashboard, Activity, Link as LinkIcon, Network, Radio, Settings, 
 import { Button } from '@/components/ui/button';
 import useSWR from 'swr';
 import { api, ApiError, type SessionStatusResponse, type SetupStateResponse } from '@/services/api';
+import { apiKeys } from '@/services/api-keys';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { NoticeCard } from '@/components/NoticeCard';
+import { toastApiError } from '@/lib/toast-api-error';
 
 const navItems = [
-  { name: '总览', path: '/dashboard', icon: LayoutDashboard, description: '先看系统现在是否可用，以及接下来最该处理什么。' },
-  { name: '运行状态', path: '/status', icon: Activity, description: '检查代理核心、目录和运行环境是否准备就绪。' },
-  { name: '订阅与节点', path: '/subscriptions', icon: LinkIcon, description: '导入服务商订阅，让可用节点进入 AXIS。' },
-  { name: '出口线路', path: '/interfaces', icon: Network, description: '把节点整理成常用线路，方便后续绑定入口。' },
-  { name: '中转线路', path: '/transits', icon: GitBranch, description: '把上游固定节点和本地出口线路拼成一条可复用中转链路。' },
-  { name: '本地入口', path: '/listeners', icon: Radio, description: '创建可供浏览器、设备或应用连接的本地代理入口。' },
-  { name: '系统与核心', path: '/system', icon: Settings, description: '管理管理员密码、高级配置和 Mihomo 版本。' },
-  { name: '操作记录', path: '/events', icon: FileText, description: '查看最近发生了什么，以及哪里可能需要处理。' },
+  { name: '总览', path: '/dashboard', icon: LayoutDashboard, description: '先看是否可用，再决定下一步。' },
+  { name: '运行状态', path: '/status', icon: Activity, description: '检查代理核心和运行环境。' },
+  { name: '订阅与节点', path: '/subscriptions', icon: LinkIcon, description: '导入订阅，让节点进来。' },
+  { name: '出口线路', path: '/interfaces', icon: Network, description: '把节点整理成常用线路，后面直接选。' },
+  { name: '中转线路', path: '/transits', icon: GitBranch, description: '把固定上游和出口线路拼成中转线路。' },
+  { name: '本地代理', path: '/listeners', icon: Radio, description: '生成设备要填写的代理地址。' },
+  { name: '系统与核心', path: '/system', icon: Settings, description: '密码、高级配置、核心版本。' },
+  { name: '操作记录', path: '/events', icon: FileText, description: '查看最近操作和原因。' },
 ];
 
 export default function AppLayout() {
@@ -24,12 +26,12 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
 
-  const { data: session, error: sessionError } = useSWR<SessionStatusResponse, ApiError>('/api/session', api.getSession, {
+  const { data: session, error: sessionError } = useSWR<SessionStatusResponse, ApiError>(apiKeys.session, api.getSession, {
     onErrorRetry: (error: ApiError) => {
       if (error.status === 401) return;
     }
   });
-  const { data: setupState } = useSWR<SetupStateResponse, ApiError>(session?.authenticated ? '/api/setup-state' : null, api.getSetupState);
+  const { data: setupState } = useSWR<SetupStateResponse, ApiError>(session?.authenticated ? apiKeys.setupState : null, api.getSetupState);
 
   useEffect(() => {
     if (sessionError?.status === 401 || (session && !session.authenticated)) {
@@ -74,7 +76,7 @@ export default function AppLayout() {
       const result = await api.reloadRuntime();
       toast.success(result.message || '最新配置已应用');
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '应用配置失败');
+      toastApiError(err, '应用配置失败');
     }
   };
 
@@ -89,7 +91,7 @@ export default function AppLayout() {
           <div className="space-y-1 px-3 pb-6">
             <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-zinc-400">AXIS Console</div>
             <div className="text-lg font-semibold tracking-tight text-zinc-950">控制台</div>
-            <p className="text-sm leading-6 text-zinc-500">用更少的步骤，完成订阅导入、线路整理和本地入口配置。</p>
+            <p className="text-sm leading-6 text-zinc-500">用更少的步骤，完成订阅导入、线路整理和本地代理配置。</p>
           </div>
           <div className="space-y-1">
             {setupState?.required && (
@@ -104,7 +106,7 @@ export default function AppLayout() {
                 <Wrench className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="space-y-0.5">
                   <div className="font-medium">首次初始化</div>
-                  <div className="text-xs leading-5 text-amber-700">先把密码、订阅和本地入口准备好。</div>
+                  <div className="text-xs leading-5 text-amber-700">先把密码、订阅和本地代理准备好。</div>
                 </div>
               </Link>
             )}
@@ -166,7 +168,7 @@ export default function AppLayout() {
                 tone="warning"
                 icon={<Wrench className="h-4 w-4" />}
                 title="还没完成首次初始化"
-                description="当前可以先继续查看页面，但建议先完成密码、订阅和本地入口设置，避免后续步骤反复跳转。"
+                description="现在可以先浏览页面，但建议先把密码、订阅和本地代理配好，后面会省很多来回。"
                 action={
                   <Button asChild size="sm">
                     <Link to="/setup">继续完成初始化</Link>

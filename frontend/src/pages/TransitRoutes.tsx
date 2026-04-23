@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
-import { api, ApiError, type AddTransitRouteRequest, type GroupView, type ProviderListItem, type TransitRouteView, type UpdateTransitRouteRequest } from '@/services/api'
+import { api, type AddTransitRouteRequest, type GroupView, type ProviderListItem, type TransitRouteView, type UpdateTransitRouteRequest } from '@/services/api'
+import { apiKeys } from '@/services/api-keys'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { toast } from 'sonner'
 import { AlertTriangle, GitBranch, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { mutateMany } from '@/lib/swr'
+import { toastApiError } from '@/lib/toast-api-error'
 
 interface TransitRouteForm {
   name: string
@@ -49,32 +52,28 @@ function formatTimestamp(value?: string) {
 }
 
 function buildTransitWarning(route: TransitRouteView) {
-  if (route.providerMissing) return '这条中转线路依赖的来源订阅已经不存在了。'
-  if (route.providerDisabled) return '这条中转线路依赖的来源订阅目前被停用了。'
-  if (route.transitProxyMissing) return '这条中转线路原先选中的中转节点在当前来源里已经不可用。'
-  if (route.egressGroupMissing) return '这条中转线路绑定的落地出口组已经不存在了。'
-  if (route.egressProviderMissing) return '这条中转线路依赖的落地出口 provider 已经不存在了。'
-  if (route.egressProviderDisabled) return '这条中转线路依赖的落地出口 provider 目前被停用了。'
-  if (route.landingMissing) return '这条中转线路绑定的落地节点已经被删除了。'
-  if (route.landingDisabled) return '这条中转线路绑定的落地节点目前被停用了。'
-  if (route.status === 'disabled') return '这条中转线路当前被手动停用，监听器即使绑定也不会继续使用。'
+  if (route.providerMissing) return '来源订阅已删除。'
+  if (route.providerDisabled) return '来源订阅已停用。'
+  if (route.transitProxyMissing) return '选中的中转节点已不可用。'
+  if (route.egressGroupMissing) return '出口线路已删除。'
+  if (route.egressProviderMissing) return '出口线路依赖的订阅已删除。'
+  if (route.egressProviderDisabled) return '出口线路依赖的订阅已停用。'
+  if (route.landingMissing) return '最终出口节点已删除。'
+  if (route.landingDisabled) return '最终出口节点已停用。'
+  if (route.status === 'disabled') return '这条中转线路已停用，本地代理选了也不会生效。'
   return ''
 }
 
 export default function TransitRoutes() {
-  const { data: routes, mutate: mutateRoutes } = useSWR('/api/transit-routes', api.getTransitRoutes)
-  const { data: providers, mutate: mutateProviders } = useSWR('/api/providers', api.getProviders)
-  const { data: groups, mutate: mutateGroups } = useSWR('/api/groups', api.getGroups)
+  const { data: routes, mutate: mutateRoutes } = useSWR(apiKeys.transitRoutes, api.getTransitRoutes)
+  const { data: providers, mutate: mutateProviders } = useSWR(apiKeys.providers, api.getProviders)
+  const { data: groups, mutate: mutateGroups } = useSWR(apiKeys.groups, api.getGroups)
 
   const providerList: ProviderListItem[] = providers || []
   const groupList: GroupView[] = groups || []
   const groupNames = groupList.map((group) => group.name)
 
-  const mutateAll = () => {
-    void mutateRoutes()
-    void mutateProviders()
-    void mutateGroups()
-  }
+  const mutateAll = () => void mutateMany(mutateRoutes, mutateProviders, mutateGroups)
 
   const [showAddRoute, setShowAddRoute] = useState(false)
   const [showEditRoute, setShowEditRoute] = useState(false)
@@ -127,7 +126,7 @@ export default function TransitRoutes() {
       return
     }
     if (!routeForm.upstream_provider || !routeForm.upstream_proxy_name || !routeForm.egress_group) {
-      toast.error('中转来源、中转节点和落地出口组都需要填写。')
+      toast.error('中转来源、中转节点和出口线路都需要填写。')
       return
     }
 
@@ -157,7 +156,7 @@ export default function TransitRoutes() {
       }
       resetForm()
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : mode === 'add' ? '创建失败' : '保存失败')
+      toastApiError(err, mode === 'add' ? '创建失败' : '保存失败')
     } finally {
       setRouteSubmitting(false)
     }
@@ -170,7 +169,7 @@ export default function TransitRoutes() {
       mutateAll()
       toast.success(enabled ? `已启用中转线路“${route.name}”。` : `已停用中转线路“${route.name}”。`)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '更新失败')
+      toastApiError(err, '更新失败')
     }
   }
 
@@ -184,7 +183,7 @@ export default function TransitRoutes() {
       toast.success(`已删除中转线路“${pendingDeleteRouteName}”。`)
       setPendingDeleteRouteName(null)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '删除失败')
+      toastApiError(err, '删除失败')
     } finally {
       setDeletingRoute(false)
     }
@@ -200,7 +199,7 @@ export default function TransitRoutes() {
       toast.success(Number.isFinite(delay) ? `检测完成，延迟 ${delay}ms。` : '检测完成。')
     } catch (err) {
       mutateAll()
-      toast.error(err instanceof ApiError ? err.message : '检测失败')
+      toastApiError(err, '检测失败')
     } finally {
       setTestingRouteName('')
     }
@@ -212,8 +211,8 @@ export default function TransitRoutes() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Transit Chain"
-        title="把固定上游节点和本地出口组拼成一条中转链路"
-        description="中转线路适合“入口业务先走固定上游节点，再接你现有出口线路”的场景。监听器绑定后，就不再直接使用普通出口组，而是走这条拼好的链路。"
+        title="把固定上游节点和出口线路拼成一条中转线路"
+        description="中转线路适合“先走固定上游节点，再接现有出口线路”的场景。本地代理选中它后，就会按这条路径转发。"
         actions={
           <Button onClick={openAddRoute} disabled={!canCreateRoute}>
             <Plus className="h-4 w-4" />
@@ -225,7 +224,7 @@ export default function TransitRoutes() {
       <NoticeCard
         icon={<GitBranch className="h-4 w-4" />}
         title="什么时候值得用中转线路"
-        description="当你需要把某类流量先送到指定节点，再接上现有出口组统一出站时，就适合单独建一条中转线路。比如固定香港入口，再通过已有的美国出口组落地。"
+        description="当你需要先走指定上游节点，再接现有出口线路统一出站时，就适合用中转线路。"
       />
 
       {!canCreateRoute && (
@@ -233,7 +232,7 @@ export default function TransitRoutes() {
           tone="warning"
           icon={<AlertTriangle className="h-4 w-4" />}
           title="还不能创建中转线路"
-          description="请先准备至少一个来源订阅或单节点，并且至少有一条可用出口线路，这里才能完成中转链路配置。"
+          description="先准备至少一个来源订阅或单节点，并且至少有一条出口线路。"
         />
       )}
 
@@ -250,7 +249,7 @@ export default function TransitRoutes() {
               className="lg:col-span-2"
               icon={<GitBranch className="h-5 w-5" />}
               title="还没有任何中转线路"
-              description="先把一条上游固定节点和一条本地出口组组合起来，后面监听器就能切换到中转模式。"
+              description="先把上游固定节点和出口线路组合起来，本地代理就可以直接选择中转线路。"
               action={
                 <Button onClick={openAddRoute} disabled={!canCreateRoute}>
                   <Plus className="h-4 w-4" />
@@ -296,11 +295,11 @@ export default function TransitRoutes() {
                         <span className="max-w-[190px] truncate font-medium text-zinc-900" title={route.upstreamProxyName}>{route.upstreamProxyName}</span>
                       </div>
                       <div className="flex justify-between gap-3">
-                        <span className="text-zinc-500">落地出口组</span>
+                        <span className="text-zinc-500">出口线路</span>
                         <span className="font-medium text-zinc-900">{route.egressGroup}</span>
                       </div>
                       <div className="flex justify-between gap-3">
-                        <span className="text-zinc-500">当前出口</span>
+                        <span className="text-zinc-500">当前节点</span>
                         <span className="max-w-[190px] truncate font-medium text-zinc-900" title={route.currentProxy || '暂未确定'}>{route.currentProxy || '暂未确定'}</span>
                       </div>
                       <div className="flex justify-between gap-3">
@@ -373,7 +372,7 @@ export default function TransitRoutes() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>添加中转线路</DialogTitle>
-            <DialogDescription>配置“中转来源节点 {'->'} 落地出口组”的链路，后续监听器就能直接绑定这条线路。</DialogDescription>
+            <DialogDescription>配置“来源节点 {'->'} 出口线路”的路径，本地代理就能直接选择这条中转线路。</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -409,10 +408,10 @@ export default function TransitRoutes() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>落地出口组</Label>
+              <Label>出口线路</Label>
               <Select value={routeForm.egress_group} onValueChange={(value) => setRouteForm({ ...routeForm, egress_group: value })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="选择一条落地出口组" />
+                  <SelectValue placeholder="选择一条出口线路" />
                 </SelectTrigger>
                 <SelectContent>
                   {groupNames.map((name) => (
@@ -423,7 +422,7 @@ export default function TransitRoutes() {
             </div>
             <div className="space-y-2">
               <Label>备注</Label>
-              <Input placeholder="例如：香港上游固定节点，再接美国出口组统一落地" value={routeForm.notes} onChange={(event) => setRouteForm({ ...routeForm, notes: event.target.value })} />
+              <Input placeholder="例如：先走香港节点，再接美国出口线路" value={routeForm.notes} onChange={(event) => setRouteForm({ ...routeForm, notes: event.target.value })} />
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={routeForm.enabled} onCheckedChange={(checked) => setRouteForm({ ...routeForm, enabled: checked })} />
@@ -441,7 +440,7 @@ export default function TransitRoutes() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>编辑中转线路：{editingRouteName}</DialogTitle>
-            <DialogDescription>你可以修改上游来源、固定节点、落地出口组和备注。</DialogDescription>
+            <DialogDescription>你可以修改上游来源、固定节点、出口线路和备注。</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -477,10 +476,10 @@ export default function TransitRoutes() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>落地出口组</Label>
+              <Label>出口线路</Label>
               <Select value={routeForm.egress_group} onValueChange={(value) => setRouteForm({ ...routeForm, egress_group: value })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="选择一条落地出口组" />
+                  <SelectValue placeholder="选择一条出口线路" />
                 </SelectTrigger>
                 <SelectContent>
                   {groupNames.map((name) => (
@@ -511,7 +510,7 @@ export default function TransitRoutes() {
           if (!open) setPendingDeleteRouteName(null)
         }}
         title="删除这条中转线路后会发生什么？"
-        description={pendingDeleteRouteName ? `“${pendingDeleteRouteName}”删除后，所有绑定它的本地入口都会失去目标链路，删除前请先调整监听器。` : ''}
+        description={pendingDeleteRouteName ? `“${pendingDeleteRouteName}”删除后，相关本地代理会失去目标线路。删除前请先调整本地代理配置。` : ''}
         confirmLabel="确认删除"
         destructive
         confirming={deletingRoute}

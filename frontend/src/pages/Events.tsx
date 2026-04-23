@@ -1,5 +1,6 @@
 import useSWR from 'swr'
 import { api, type EventEntry } from '@/services/api'
+import { apiKeys } from '@/services/api-keys'
 import { EmptyStateCard } from '@/components/EmptyStateCard'
 import { PageHeader } from '@/components/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
@@ -37,11 +38,11 @@ function sanitizeEventMessage(message: string) {
     .replace(/^controller 返回 (\d+)$/, '连接代理核心失败（状态码 $1）')
     .replace(/^controller 可达$/, '代理核心连接正常')
     .replace(/出口组/g, '出口线路')
-    .replace(/入口监听/g, '本地入口')
+    .replace(/入口监听/g, '本地代理')
 }
 
 export default function Events() {
-  const { data: events } = useSWR('/api/events', api.getEvents, { refreshInterval: 5000 })
+  const { data: events } = useSWR(apiKeys.events, api.getEvents, { refreshInterval: 5000 })
 
   const getBadgeStyle = (level: string) => {
     switch (level.toLowerCase()) {
@@ -56,7 +57,7 @@ export default function Events() {
       <PageHeader
         eyebrow="History"
         title="看看最近到底发生了什么"
-        description="这里记录的是 AXIS 最近的重要变化、提醒和失败原因。改完配置以后，如果结果和预期不一样，先来这里看。"
+        description="这里会记录重要操作、提醒和失败原因。结果和预期不一样时，先来这里看。"
       />
 
       <Card className="shadow-sm border-zinc-200">
@@ -68,7 +69,7 @@ export default function Events() {
               <EmptyStateCard
                 icon={<FileText className="h-5 w-5" />}
                 title="暂时还没有操作记录"
-                description="这通常表示你刚启动系统，或者最近还没有执行订阅刷新、配置保存、入口变更这类操作。"
+                description="这通常表示你刚启动系统，或者最近还没有执行订阅刷新、配置保存、本地代理变更等操作。"
               />
             </div>
           ) : (

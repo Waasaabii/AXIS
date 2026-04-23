@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
-import { api, ApiError, type ListenerUser, type ListenerView, type TransitRouteView } from '@/services/api'
+import { api, type ListenerUser, type ListenerView, type TransitRouteView } from '@/services/api'
+import { apiKeys } from '@/services/api-keys'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,21 +17,23 @@ import { useClipboard } from '@/hooks/useClipboard'
 import { generatePassword, generateUsername } from '@/lib/random'
 import { toast } from 'sonner'
 import { Network, Radio, Users, ShieldAlert, Plus, Trash2, Pencil, AlertTriangle, Eye, EyeOff, Copy, Shuffle, GitBranch } from 'lucide-react'
+import { mutateMany } from '@/lib/swr'
+import { toastApiError } from '@/lib/toast-api-error'
 
 function buildListenerWarning(listener: ListenerView) {
-  if (listener.transitMissing) return '这条入口绑定的中转线路已经不存在了，请重新选择。'
-  if (listener.transitDisabled) return '这条入口绑定的中转线路目前被停用了。'
-  if (listener.transitProxyMissing) return '这条入口依赖的中转节点当前已经不可用，请重新选择线路。'
-  if (listener.groupMissing) return '这条入口原先绑定的出口线路已经不存在了，请重新选择线路。'
-  if (listener.providerMissing) return '这条入口依赖的出口 provider 已经不存在了。'
-  if (listener.providerDisabled) return '这条入口依赖的出口 provider 目前被停用了。'
-  if (listener.landingMissing) return '这条入口绑定的落地节点已经被删除了。'
-  if (listener.landingDisabled) return '这条入口绑定的落地节点目前被停用了。'
+  if (listener.transitMissing) return '选择的中转线路已经不存在了，请重新选择。'
+  if (listener.transitDisabled) return '选择的中转线路已停用。'
+  if (listener.transitProxyMissing) return '中转线路里的上游节点已不可用。'
+  if (listener.groupMissing) return '选择的出口线路已经不存在了，请重新选择。'
+  if (listener.providerMissing) return '出口线路依赖的订阅已删除。'
+  if (listener.providerDisabled) return '出口线路依赖的订阅已停用。'
+  if (listener.landingMissing) return '最终出口节点已删除。'
+  if (listener.landingDisabled) return '最终出口节点已停用。'
   return ''
 }
 
 function formatRouteMode(routeMode: string) {
-  return routeMode === 'transit' ? '中转模式' : '直连模式'
+  return routeMode === 'transit' ? '中转' : '直连'
 }
 
 function PasswordCell({ value }: { value: string }) {
@@ -85,9 +88,9 @@ const emptyListenerForm: ListenerForm = {
 }
 
 export default function Listeners() {
-  const { data: listeners, mutate: mutateListeners } = useSWR('/api/listeners', api.getListeners)
-  const { data: groups, mutate: mutateGroups } = useSWR('/api/groups', api.getGroups)
-  const { data: transitRoutes, mutate: mutateTransitRoutes } = useSWR('/api/transit-routes', api.getTransitRoutes)
+  const { data: listeners, mutate: mutateListeners } = useSWR(apiKeys.listeners, api.getListeners)
+  const { data: groups, mutate: mutateGroups } = useSWR(apiKeys.groups, api.getGroups)
+  const { data: transitRoutes, mutate: mutateTransitRoutes } = useSWR(apiKeys.transitRoutes, api.getTransitRoutes)
   const { copy } = useClipboard()
 
   const groupNames = groups?.map((group) => group.name) || []
@@ -95,11 +98,7 @@ export default function Listeners() {
   const transitRouteNames = availableTransitRoutes.map((route) => route.name)
   const canCreateListener = groupNames.length > 0 || transitRouteNames.length > 0
 
-  const mutateAll = () => {
-    void mutateListeners()
-    void mutateGroups()
-    void mutateTransitRoutes()
-  }
+  const mutateAll = () => void mutateMany(mutateListeners, mutateGroups, mutateTransitRoutes)
 
   const [showAddListener, setShowAddListener] = useState(false)
   const [showEditListener, setShowEditListener] = useState(false)
@@ -149,15 +148,15 @@ export default function Listeners() {
 
   const handleAddListener = async () => {
     if (!listenerForm.name.trim() || !listenerForm.port) {
-      toast.error('入口名称和端口都需要填写。')
+      toast.error('代理名称和端口都需要填写。')
       return
     }
     if (listenerForm.route_mode === 'direct' && !listenerForm.egress_group) {
-      toast.error('直连模式下必须选择一条出口线路。')
+      toast.error('直连时必须选择一条出口线路。')
       return
     }
     if (listenerForm.route_mode === 'transit' && !listenerForm.transit_route) {
-      toast.error('中转模式下必须选择一条中转线路。')
+      toast.error('中转时必须选择一条中转线路。')
       return
     }
 
@@ -168,9 +167,9 @@ export default function Listeners() {
       mutateAll()
       setShowAddListener(false)
       setListenerForm({ ...emptyListenerForm })
-      toast.success('本地入口已创建。')
+      toast.success('本地代理已创建。')
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '添加失败')
+      toastApiError(err, '添加失败')
     } finally {
       setListenerSubmitting(false)
     }
@@ -200,11 +199,11 @@ export default function Listeners() {
       return
     }
     if (listenerForm.route_mode === 'direct' && !listenerForm.egress_group) {
-      toast.error('直连模式下必须选择一条出口线路。')
+      toast.error('直连时必须选择一条出口线路。')
       return
     }
     if (listenerForm.route_mode === 'transit' && !listenerForm.transit_route) {
-      toast.error('中转模式下必须选择一条中转线路。')
+      toast.error('中转时必须选择一条中转线路。')
       return
     }
 
@@ -215,9 +214,9 @@ export default function Listeners() {
       mutateAll()
       setShowEditListener(false)
       setListenerForm({ ...emptyListenerForm })
-      toast.success('本地入口已更新。')
+      toast.success('本地代理已更新。')
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '修改失败')
+      toastApiError(err, '修改失败')
     } finally {
       setListenerSubmitting(false)
     }
@@ -230,10 +229,10 @@ export default function Listeners() {
       const data = await api.deleteListener(pendingDeleteListenerName)
       if (!data.ok) throw new Error('删除失败')
       mutateAll()
-      toast.success(`已删除本地入口“${pendingDeleteListenerName}”。`)
+      toast.success(`已删除本地代理“${pendingDeleteListenerName}”。`)
       setPendingDeleteListenerName(null)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '删除失败')
+      toastApiError(err, '删除失败')
     } finally {
       setDeletingListener(false)
     }
@@ -254,7 +253,7 @@ export default function Listeners() {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs leading-5 text-zinc-500">这个入口接入后，会先走上游固定节点，再接后半段出口链路。</p>
+          <p className="text-xs leading-5 text-zinc-500">连接后，会先走上游固定节点，再接后半段出口线路。</p>
         </div>
       )
     }
@@ -272,7 +271,7 @@ export default function Listeners() {
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs leading-5 text-zinc-500">这个入口连上后，会直接走你选中的本地出口线路。</p>
+        <p className="text-xs leading-5 text-zinc-500">连接后，会直接走你选中的出口线路。</p>
       </div>
     )
   }
@@ -281,34 +280,34 @@ export default function Listeners() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Local Access"
-        title="给浏览器和设备准备一个可连接的本地入口"
-        description="本地入口就是你最终要在系统、浏览器或其他设备里填写的代理地址。现在可以按场景选择直连模式，或者直接绑定一条已经整理好的中转线路。"
+        title="给浏览器和设备准备一个可连接的本地代理"
+        description="这里会生成你要填到系统、浏览器或设备里的代理地址。你可以选择直连出口线路，或走中转线路。"
         actions={
           <Button onClick={openAddListenerDialog} disabled={!canCreateListener}>
             <Plus className="h-4 w-4" />
-            添加本地入口
+            添加本地代理
           </Button>
         }
       />
 
       <NoticeCard
         icon={<Radio className="h-4 w-4" />}
-        title="什么时候需要多个本地入口"
-        description="如果你想给不同设备、不同权限或不同链路单独分配入口，就值得创建多个本地入口。比如“电脑默认”“电视流媒体”“经过中转的远端业务”这种分法会更清晰。"
+        title="什么时候需要多个本地代理"
+        description="想给不同设备单独分配地址，就建多个。例如：电脑默认、电视流媒体、远端业务。"
       />
 
       {!canCreateListener && (
         <NoticeCard
           tone="warning"
           icon={<AlertTriangle className="h-4 w-4" />}
-          title="还不能创建本地入口"
-          description="因为当前既没有可用出口线路，也没有可用中转线路。先去整理好至少一种目标链路，这里才能继续往下配。"
+          title="还不能创建本地代理"
+          description="因为目前没有可用的出口线路或中转线路。先去准备好其中之一。"
         />
       )}
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">本地入口列表</h2>
+          <h2 className="text-lg font-semibold">本地代理列表</h2>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -318,12 +317,12 @@ export default function Listeners() {
             <EmptyStateCard
               className="md:col-span-2 xl:col-span-3"
               icon={<Radio className="h-5 w-5" />}
-              title="还没有任何本地入口"
-              description="先创建一个入口，让浏览器、系统代理或其他设备真正能连到 AXIS。创建时只需要决定协议、端口，以及是直连出口还是绑定中转线路。"
+              title="还没有任何本地代理"
+              description="先创建一个代理地址。只需要选择协议、端口，以及直连出口线路还是走中转线路。"
               action={
                 <Button onClick={openAddListenerDialog} disabled={!canCreateListener}>
                   <Plus className="h-4 w-4" />
-                  添加第一个本地入口
+                  添加第一个本地代理
                 </Button>
               }
             />
@@ -368,19 +367,19 @@ export default function Listeners() {
 
                       <div className="space-y-2 rounded-lg border bg-zinc-50 p-3 text-sm">
                         <div className="flex justify-between gap-3">
-                          <span className="text-zinc-500">目标链路</span>
+                          <span className="text-zinc-500">选择的线路</span>
                           <span className="font-medium text-zinc-900">{listener.targetName || listener.egressGroup}</span>
                         </div>
                         <div className="flex justify-between gap-3">
-                          <span className="text-zinc-500">实际出口组</span>
+                          <span className="text-zinc-500">最终出口线路</span>
                           <span className="font-medium text-zinc-900">{listener.egressGroup || '暂未确定'}</span>
                         </div>
                         <div className="flex justify-between gap-3">
-                          <span className="text-zinc-500">当前出口</span>
+                          <span className="text-zinc-500">当前节点</span>
                           <span className="max-w-[140px] truncate text-zinc-900" title={listener.currentProxy || '还没有选中的节点'}>{listener.currentProxy || '还没有选中的节点'}</span>
                         </div>
                         <div className="flex justify-between gap-3">
-                          <span className="text-zinc-500">实际路径</span>
+                          <span className="text-zinc-500">当前路径</span>
                           <span className="break-all text-right text-zinc-900" title={listener.routeSummary || listener.targetName}>{listener.routeSummary || listener.targetName}</span>
                         </div>
                       </div>
@@ -418,18 +417,18 @@ export default function Listeners() {
                     {listener.userCount === 0 && listener.status === 'configured' ? (
                       <div className="mt-4 flex items-start gap-2 rounded bg-amber-50 p-2 text-xs text-amber-700">
                         <ShieldAlert className="h-4 w-4 shrink-0" />
-                        <p>这个入口没有账号密码，知道地址的人都可以直接连接。</p>
+                        <p>这个代理地址不需要账号密码，知道地址的人都可以直接连接。</p>
                       </div>
                     ) : null}
 
                     <div className="mt-4 flex items-center gap-2 border-t pt-3">
                       <Button variant="outline" size="sm" onClick={() => openEditListener(listener)}>
                         <Pencil className="mr-1 h-3.5 w-3.5" />
-                        编辑入口
+                        编辑代理
                       </Button>
                       <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setPendingDeleteListenerName(listener.name)}>
                         <Trash2 className="mr-1 h-3.5 w-3.5" />
-                        删除入口
+                        删除代理
                       </Button>
                     </div>
                   </CardContent>
@@ -443,12 +442,12 @@ export default function Listeners() {
       <Dialog open={showAddListener} onOpenChange={setShowAddListener}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>添加一个本地入口</DialogTitle>
-            <DialogDescription>配置浏览器、系统或其他设备要连接的本地代理地址，并决定它是直连出口还是绑定中转链路。</DialogDescription>
+            <DialogTitle>添加一个本地代理</DialogTitle>
+            <DialogDescription>生成一个本地代理地址，并选择直连出口线路或走中转线路。</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>入口名称</Label>
+              <Label>代理名称</Label>
               <Input placeholder="例如：电脑默认、电视流媒体、远端中转业务" value={listenerForm.name} onChange={(event) => setListenerForm({ ...listenerForm, name: event.target.value })} />
               <p className="text-xs leading-5 text-zinc-500">建议按设备或用途命名，后面更容易区分。</p>
             </div>
@@ -475,7 +474,7 @@ export default function Listeners() {
                 <Input placeholder="0.0.0.0" value={listenerForm.listen} onChange={(event) => setListenerForm({ ...listenerForm, listen: event.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>链路模式</Label>
+                <Label>线路选择</Label>
                 <Select value={listenerForm.route_mode} onValueChange={applyRouteMode}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -491,7 +490,7 @@ export default function Listeners() {
               <Label>允许 UDP</Label>
             </div>
             <div className="border-t pt-4">
-              <p className="mb-3 text-sm text-zinc-500">访问账号（如果留空，这个入口会变成无密码访问）</p>
+              <p className="mb-3 text-sm text-zinc-500">访问账号（留空表示不需要账号密码）</p>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>用户名</Label>
@@ -516,7 +515,7 @@ export default function Listeners() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddListener(false)}>取消</Button>
-            <Button onClick={handleAddListener} disabled={listenerSubmitting}>{listenerSubmitting ? '创建中...' : '创建入口'}</Button>
+            <Button onClick={handleAddListener} disabled={listenerSubmitting}>{listenerSubmitting ? '创建中...' : '创建代理'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -524,8 +523,8 @@ export default function Listeners() {
       <Dialog open={showEditListener} onOpenChange={setShowEditListener}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>编辑入口：{editingListenerName}</DialogTitle>
-            <DialogDescription>你可以修改协议、端口、链路模式或访问账号。清空账号字段即可移除认证。</DialogDescription>
+            <DialogTitle>编辑本地代理：{editingListenerName}</DialogTitle>
+            <DialogDescription>你可以修改协议、端口、线路选择或访问账号。清空账号即可取消认证。</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
@@ -551,7 +550,7 @@ export default function Listeners() {
                 <Input placeholder="0.0.0.0" value={listenerForm.listen} onChange={(event) => setListenerForm({ ...listenerForm, listen: event.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>链路模式</Label>
+                <Label>线路选择</Label>
                 <Select value={listenerForm.route_mode} onValueChange={applyRouteMode}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -592,7 +591,7 @@ export default function Listeners() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditListener(false)}>取消</Button>
-            <Button onClick={handleEditListener} disabled={listenerSubmitting}>{listenerSubmitting ? '保存中...' : '保存入口'}</Button>
+            <Button onClick={handleEditListener} disabled={listenerSubmitting}>{listenerSubmitting ? '保存中...' : '保存代理'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -602,8 +601,8 @@ export default function Listeners() {
         onOpenChange={(open) => {
           if (!open) setPendingDeleteListenerName(null)
         }}
-        title="删除这个本地入口后会发生什么？"
-        description={pendingDeleteListenerName ? `“${pendingDeleteListenerName}”删除后，设备就不能再通过这个地址连接 AXIS。已经绑定的出口或中转线路不会被一起删除。` : ''}
+        title="删除这个本地代理后会发生什么？"
+        description={pendingDeleteListenerName ? `“${pendingDeleteListenerName}”删除后，这个代理地址会失效。出口线路或中转线路不会被一起删除。` : ''}
         confirmLabel="确认删除"
         destructive
         confirming={deletingListener}

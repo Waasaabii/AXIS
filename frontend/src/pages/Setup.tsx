@@ -12,6 +12,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { api, ApiError, type SetupStateResponse } from "@/services/api"
+import { apiKeys } from "@/services/api-keys"
+import { validatePasswordPair } from "@/lib/password"
+import { mutateKeys } from "@/lib/swr"
+import { toastApiError } from "@/lib/toast-api-error"
 
 const actionLinks = {
   password: "/system",
@@ -24,7 +28,7 @@ const checkTitleMap: Partial<Record<SetupStateResponse["checks"][number]["key"],
   password: "管理员密码",
   subscriptions: "订阅与节点",
   "egress-groups": "出口线路",
-  listeners: "本地入口",
+  listeners: "本地代理",
 }
 
 function sanitizeCheckSummary(summary: string) {
@@ -32,15 +36,15 @@ function sanitizeCheckSummary(summary: string) {
     .replace(/订阅源/g, "订阅")
     .replace(/出口组/g, "出口线路")
     .replace(/代理分组/g, "出口线路")
-    .replace(/入口监听/g, "本地入口")
-    .replace(/代理入口/g, "本地入口")
+    .replace(/入口监听/g, "本地代理")
+    .replace(/代理入口/g, "本地代理")
 }
 
 export default function Setup() {
   const navigate = useNavigate()
   const { mutate } = useSWRConfig()
-  const { data: setupState, error: setupError, mutate: mutateSetup } = useSWR("/api/setup-state", api.getSetupState)
-  const { data: session, mutate: mutateSession } = useSWR("/api/session", api.getSession)
+  const { data: setupState, error: setupError, mutate: mutateSetup } = useSWR(apiKeys.setupState, api.getSetupState)
+  const { data: session } = useSWR(apiKeys.session, api.getSession)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -61,28 +65,20 @@ export default function Setup() {
   }, [setupState?.adminUsername])
 
   const handleSavePassword = async () => {
-    if (password !== confirmPassword) {
-      toast.error("两次输入的密码不一致，请重新确认。")
-      return
-    }
-    if (password.length < 6) {
-      toast.error("密码至少需要 6 位。")
+    const passwordError = validatePasswordPair(password, confirmPassword)
+    if (passwordError) {
+      toast.error(passwordError)
       return
     }
 
     setIsSavingPassword(true)
     try {
+      const trimmedUsername = username.trim()
       if (setupState?.needsPasswordReset) {
-        await api.bootstrapAdmin({ username: username.trim(), password })
-        await api.login({ username: username.trim(), password })
-        await Promise.all([
-          mutate("/api/session"),
-          mutate("/api/bootstrap/status"),
-          mutate("/api/setup-state"),
-        ])
+        await api.bootstrapAdmin({ username: trimmedUsername, password })
+        await api.login({ username: trimmedUsername, password })
+        await mutateKeys(mutate, [apiKeys.session, apiKeys.bootstrapStatus, apiKeys.setupState])
         toast.success("管理员账号已创建，已自动登录。")
-        await mutateSession()
-        await refreshSetup()
         navigate("/dashboard", { replace: true })
         return
       } else {
@@ -94,7 +90,7 @@ export default function Setup() {
       setConfirmPassword("")
       await refreshSetup()
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "管理员账号保存失败，请稍后再试。")
+      toastApiError(error, setupState?.needsPasswordReset ? "管理员账号保存失败，请稍后再试。" : "管理员密码保存失败，请稍后再试。")
     } finally {
       setIsSavingPassword(false)
     }
@@ -118,7 +114,7 @@ export default function Setup() {
       setSubscriptionURL("")
       await refreshSetup()
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "添加订阅失败，请检查链接后重试。")
+      toastApiError(error, "添加订阅失败，请检查链接后重试。")
     } finally {
       setIsSavingSubscription(false)
     }
@@ -144,7 +140,7 @@ export default function Setup() {
         className="mx-auto max-w-3xl"
         icon={<CheckCircle2 className="h-5 w-5" />}
         title="首次初始化已经完成"
-        description="密码、订阅和基础入口都已经准备好。你可以直接进入总览继续使用，或者回到各页面做更细的整理。"
+        description="密码、订阅和本地代理都已准备好。现在可以直接进入总览继续使用。"
         action={
           <Button onClick={() => navigate(session?.authenticated ? "/dashboard" : "/login")}>
             {session?.authenticated ? "进入总览" : "去登录"}
@@ -158,15 +154,15 @@ export default function Setup() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Getting Started"
-        title="先完成这几步，再开始稳定使用"
-        description="这里不会让你读一堆配置名词。你只需要完成密码、订阅和入口这几项最小准备，系统就能正常进入工作状态。"
+        title="先完成这几步，再开始使用"
+        description="把密码、订阅和本地代理配好，系统就能进入可用状态。"
       />
 
       <NoticeCard
         tone="warning"
         icon={<Sparkles className="h-4 w-4" />}
-        title="初始化的目标只有一个"
-        description="把系统从“能打开页面”变成“真的可以连上用”。下面每张卡片都只告诉你缺什么、为什么缺、点哪里继续。"
+        title="按提示补齐缺口即可"
+        description="缺什么就补什么。每张卡片都会告诉你下一步该点哪里。"
       />
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -190,18 +186,18 @@ export default function Setup() {
           <CardContent className="space-y-3">
             <QuickStep
               index={1}
-              title="先改管理员密码"
-              description="如果还在用默认密码，先替换掉，避免控制台被直接登录。"
+              title="先设置管理员密码"
+              description="先把默认密码换掉，避免被直接登录。"
             />
             <QuickStep
               index={2}
-              title="再导入你的订阅"
-              description="有了真实订阅，系统才会出现你自己的可用节点。"
+              title="再导入订阅"
+              description="导入后，系统会开始拉取节点。"
             />
             <QuickStep
               index={3}
-              title="最后创建本地入口"
-              description="让浏览器、系统或其他设备真正能连到 AXIS。"
+              title="最后配置本地代理"
+              description="生成设备要填的代理地址。"
             />
           </CardContent>
         </Card>
@@ -214,7 +210,7 @@ export default function Setup() {
               <KeyRound className="h-5 w-5 text-zinc-500" />
               先把管理员密码换掉
             </CardTitle>
-            <CardDescription>这是最先该完成的一步。设置好之后，后面再继续导入订阅和入口配置。</CardDescription>
+            <CardDescription>先把管理员账号和密码设置好，后面再导入订阅和配置本地代理。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
@@ -254,13 +250,13 @@ export default function Setup() {
 
       {!setupState.hasRealSubscriptions && (
         <Card className="border-zinc-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Link2 className="h-5 w-5 text-zinc-500" />
-              添加第一个可用订阅
-            </CardTitle>
-            <CardDescription>把服务商给你的订阅链接填进来，替换当前示例内容。完成这一步后，AXIS 才会有真实可用的节点。</CardDescription>
-          </CardHeader>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Link2 className="h-5 w-5 text-zinc-500" />
+            添加第一个可用订阅
+          </CardTitle>
+          <CardDescription>填入订阅链接后，系统会开始拉取节点。</CardDescription>
+        </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-[220px_1fr]">
               <FieldBlock
@@ -289,7 +285,7 @@ export default function Setup() {
               </Button>
             </div>
             {!session?.authenticated ? (
-              <p className="text-sm leading-6 text-zinc-500">先创建管理员账号并自动登录，后面才能继续添加订阅、线路和入口。</p>
+              <p className="text-sm leading-6 text-zinc-500">先创建管理员账号并登录，后面才能继续。</p>
             ) : null}
           </CardContent>
         </Card>
@@ -297,13 +293,13 @@ export default function Setup() {
 
       <Card className="border-zinc-200 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">如果你想分步骤完成</CardTitle>
-          <CardDescription>也可以直接进入下面的页面逐项设置。每个页面都保留了更详细的说明。</CardDescription>
+          <CardTitle className="text-base">也可以分开做</CardTitle>
+          <CardDescription>直接去下面页面分别设置即可。</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
           <QuickLinkCard title="订阅与节点" description="导入你的订阅链接，让可用节点进入系统。" icon={<Link2 className="h-5 w-5 text-zinc-500" />} to="/subscriptions" disabled={!session?.authenticated} />
           <QuickLinkCard title="出口线路" description="把节点整理成常用线路，例如香港、日本或自动选择。" icon={<Network className="h-5 w-5 text-zinc-500" />} to="/interfaces" disabled={!session?.authenticated} />
-          <QuickLinkCard title="本地入口" description="创建浏览器和设备真正要连接的本地代理入口。" icon={<Radio className="h-5 w-5 text-zinc-500" />} to="/listeners" disabled={!session?.authenticated} />
+          <QuickLinkCard title="本地代理" description="生成浏览器和设备要填写的代理地址。" icon={<Radio className="h-5 w-5 text-zinc-500" />} to="/listeners" disabled={!session?.authenticated} />
         </CardContent>
       </Card>
     </div>

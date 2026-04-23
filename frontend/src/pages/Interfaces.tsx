@@ -1,6 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import useSWR from 'swr'
-import { api, ApiError, type GroupView, type LandingProxyView, type ProviderListItem } from '@/services/api'
+import { api, type GroupView, type LandingProxyView, type ProviderListItem } from '@/services/api'
+import { apiKeys } from '@/services/api-keys'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,8 @@ import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Trash2, Pencil, AlertTriangle, RefreshCw, FolderPlus, HelpCircle, ChevronDown, Network, Route, Plus, ShieldCheck, ArrowUp, ArrowDown, X } from 'lucide-react'
+import { mutateMany } from '@/lib/swr'
+import { toastApiError } from '@/lib/toast-api-error'
 
 /* ── Filter presets ── */
 const FILTER_PRESETS = [
@@ -44,10 +47,10 @@ function buildRouteSummary(group: GroupView) {
 }
 
 function buildGroupWarning(group: GroupView) {
-  if (group.providerMissing) return '这条线路原先使用的订阅已经不存在了，请重新选择数据来源。'
-  if (group.providerDisabled) return '这条线路依赖的订阅目前被停用了，恢复启用后这里会重新可用。'
-  if (group.landingMissing) return '绑定的落地节点已经被删除了，请重新指定最终出口。'
-  if (group.landingDisabled) return '绑定的落地节点目前已停用，这条线路暂时不会继续往下转发。'
+  if (group.providerMissing) return '订阅已删除，请重新选择节点来源。'
+  if (group.providerDisabled) return '订阅已停用，启用后这里会恢复。'
+  if (group.landingMissing) return '最终出口节点已删除，请重新选择。'
+  if (group.landingDisabled) return '最终出口节点已停用，这条线路暂时不会继续转发。'
   return ''
 }
 
@@ -152,15 +155,15 @@ const emptyLandingForm: LandingForm = {
 }
 
 export default function Interfaces() {
-  const { data: groups, mutate: mutateGroups } = useSWR('/api/groups', api.getGroups)
-  const { data: landingProxies, mutate: mutateLandingProxies } = useSWR('/api/landing-proxies', api.getLandingProxies)
-  const { data: configData, mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
-  const { data: providers } = useSWR('/api/providers', api.getProviders)
+  const { data: groups, mutate: mutateGroups } = useSWR(apiKeys.groups, api.getGroups)
+  const { data: landingProxies, mutate: mutateLandingProxies } = useSWR(apiKeys.landingProxies, api.getLandingProxies)
+  const { data: configData, mutate: mutateConfig } = useSWR(apiKeys.config, api.getConfig)
+  const { data: providers } = useSWR(apiKeys.providers, api.getProviders)
 
   const subscriptionNames = configData?.config.subscriptions.map((subscription) => subscription.name) || []
   const providerList: ProviderListItem[] = providers || []
 
-  const mutateAll = () => { mutateGroups(); mutateLandingProxies(); mutateConfig() }
+  const mutateAll = () => void mutateMany(mutateGroups, mutateLandingProxies, mutateConfig)
 
   /* ── Landing proxy state ── */
   const [showAddLanding, setShowAddLanding] = useState(false)
@@ -219,7 +222,7 @@ export default function Interfaces() {
 
   const handleAddLanding = async () => {
     if (!landingForm.name.trim() || !landingForm.server.trim() || !landingForm.port) {
-      toast.error('落地节点名称、地址和端口都需要填写。')
+      toast.error('最终出口节点名称、地址和端口都需要填写。')
       return
     }
     setLandingSubmitting(true)
@@ -240,9 +243,9 @@ export default function Interfaces() {
       mutateAll()
       setShowAddLanding(false)
       setLandingForm({ ...emptyLandingForm })
-      toast.success('落地节点已创建。')
+      toast.success('最终出口节点已创建。')
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '添加失败')
+      toastApiError(err, '添加失败')
     } finally {
       setLandingSubmitting(false)
     }
@@ -270,9 +273,9 @@ export default function Interfaces() {
       mutateAll()
       setShowEditLanding(false)
       setLandingForm({ ...emptyLandingForm })
-      toast.success('落地节点已更新。')
+      toast.success('最终出口节点已更新。')
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '修改失败')
+      toastApiError(err, '修改失败')
     } finally {
       setLandingSubmitting(false)
     }
@@ -285,10 +288,10 @@ export default function Interfaces() {
       const data = await api.deleteLandingProxy(pendingDeleteLandingName)
       if (!data.ok) throw new Error('删除失败')
       mutateAll()
-      toast.success(`已删除落地节点“${pendingDeleteLandingName}”。`)
+      toast.success(`已删除最终出口节点“${pendingDeleteLandingName}”。`)
       setPendingDeleteLandingName(null)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '删除失败')
+      toastApiError(err, '删除失败')
     } finally {
       setDeletingLanding(false)
     }
@@ -310,7 +313,7 @@ export default function Interfaces() {
       setShowAddGroup(false)
       setGroupForm({ ...emptyGroupForm })
       toast.success('出口线路已创建。')
-    } catch (err) { toast.error(err instanceof ApiError ? err.message : '添加失败') } finally { setGroupSubmitting(false) }
+    } catch (err) { toastApiError(err, '添加失败') } finally { setGroupSubmitting(false) }
   }
 
   const resetFallbackForm = () => {
@@ -370,7 +373,7 @@ export default function Interfaces() {
       setShowAddFallbackGroup(false)
       resetFallbackForm()
       toast.success('顺序容灾组已创建。')
-    } catch (err) { toast.error(err instanceof ApiError ? err.message : '创建失败') } finally { setFallbackSubmitting(false) }
+    } catch (err) { toastApiError(err, '创建失败') } finally { setFallbackSubmitting(false) }
   }
 
   const openEditGroup = (g: GroupView) => {
@@ -407,7 +410,7 @@ export default function Interfaces() {
       mutateAll()
       setShowEditGroup(false)
       toast.success('出口线路已更新。')
-    } catch (err) { toast.error(err instanceof ApiError ? err.message : '修改失败') } finally { setGroupSubmitting(false) }
+    } catch (err) { toastApiError(err, '修改失败') } finally { setGroupSubmitting(false) }
   }
 
   const handleEditFallbackGroup = async () => {
@@ -429,7 +432,7 @@ export default function Interfaces() {
       setShowEditFallbackGroup(false)
       resetFallbackForm()
       toast.success('顺序容灾组已更新。')
-    } catch (err) { toast.error(err instanceof ApiError ? err.message : '修改失败') } finally { setFallbackSubmitting(false) }
+    } catch (err) { toastApiError(err, '修改失败') } finally { setFallbackSubmitting(false) }
   }
 
   const handleDeleteGroup = async () => {
@@ -441,7 +444,7 @@ export default function Interfaces() {
       mutateAll()
       toast.success(`已删除出口线路“${pendingDeleteGroupName}”。`)
       setPendingDeleteGroupName(null)
-    } catch (err) { toast.error(err instanceof ApiError ? err.message : '删除失败') } finally { setDeletingGroup(false) }
+    } catch (err) { toastApiError(err, '删除失败') } finally { setDeletingGroup(false) }
   }
 
   const handleSelectGroup = async (groupName: string, proxyName: string) => {
@@ -449,7 +452,7 @@ export default function Interfaces() {
       await api.selectGroup(groupName, { proxyName })
       mutateGroups()
       toast.success(`线路“${groupName}”当前改为使用“${proxyName}”。`)
-    } catch (err) { toast.error(err instanceof ApiError ? err.message : '切换失败') }
+    } catch (err) { toastApiError(err, '切换失败') }
   }
 
   const handleHealthcheck = async (groupName: string) => {
@@ -457,7 +460,7 @@ export default function Interfaces() {
       await api.healthcheckGroup(groupName)
       mutateGroups()
       toast.success(`线路“${groupName}”已经重新检测可用节点。`)
-    } catch (err) { toast.error(err instanceof ApiError ? err.message : '健康检查失败') }
+    } catch (err) { toastApiError(err, '健康检查失败') }
   }
 
   /* ════════════════════  Render  ════════════════════ */
@@ -467,16 +470,16 @@ export default function Interfaces() {
       <PageHeader
         eyebrow="Routes"
         title="把节点和最终出口整理成一条可复用路径"
-        description="先决定最终从哪里出公网，再把订阅节点整理成出口线路。这样后面给设备开本地入口时，只需要选一条已经整理好的路径。"
+        description="先确定最终出口，再整理出口线路。本地代理只需要选择线路即可。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={openAddLanding}>
               <Plus className="h-4 w-4" />
-              添加落地节点
+              添加最终出口节点
             </Button>
             <Button onClick={() => { setGroupForm({ ...emptyGroupForm }); setShowAddGroup(true) }} disabled={subscriptionNames.length === 0}>
               <FolderPlus className="h-4 w-4" />
-              添加单节点线路
+              添加出口线路
             </Button>
             <Button variant="outline" onClick={() => { resetFallbackForm(); setShowAddFallbackGroup(true) }} disabled={subscriptionNames.length === 0}>
               <ShieldCheck className="h-4 w-4" />
@@ -488,19 +491,19 @@ export default function Interfaces() {
 
       <NoticeCard
         icon={<Route className="h-4 w-4" />}
-        title="先想清楚你要管理的是“路径”"
-        description="一条完整路径通常是“订阅节点 -> 可选的落地节点 -> 公网”。如果你想让不同线路最终落到不同 IP，就先创建落地节点；如果只想直接出公网，也可以保持直连。"
+        title="先确定最终出口"
+        description="想固定出站 IP，就先添加最终出口节点；不添加则直接出公网。"
       />
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold">落地节点</h2>
-            <p className="text-sm text-zinc-500">这里定义最终出口。线路绑定它以后，流量会先走你选中的订阅节点，再从这里出公网。</p>
+            <h2 className="text-lg font-semibold">最终出口节点</h2>
+            <p className="text-sm text-zinc-500">这里是最终出口。出口线路选了它后，会先走订阅节点，再从这里出公网。</p>
           </div>
           <Button variant="outline" onClick={openAddLanding}>
             <Plus className="h-4 w-4" />
-            添加落地节点
+            添加最终出口节点
           </Button>
         </div>
 
@@ -509,12 +512,12 @@ export default function Interfaces() {
         ) : landingProxies.length === 0 ? (
           <EmptyStateCard
             icon={<Route className="h-5 w-5" />}
-            title="还没有任何落地节点"
-            description="如果你想让不同线路最终落到不同公网 IP，就先在这里添加固定的中转或出口节点。没有这一步，线路会直接出公网。"
+            title="还没有最终出口节点"
+            description="想固定出站 IP，就先添加一个最终出口节点；不添加则直接出公网。"
             action={
               <Button variant="outline" onClick={openAddLanding}>
                 <Plus className="h-4 w-4" />
-                添加第一个落地节点
+                添加第一个最终出口节点
               </Button>
             }
           />
@@ -545,7 +548,7 @@ export default function Interfaces() {
 
                   {landing.inUseBy.length > 0 ? (
                     <div className="rounded-lg border bg-zinc-50 p-3 text-sm space-y-2">
-                      <p className="text-zinc-500">正在使用这条落地路径的出口线路</p>
+                      <p className="text-zinc-500">正在使用这个最终出口的出口线路</p>
                       <div className="flex flex-wrap gap-2">
                         {landing.inUseBy.map((groupName) => (
                           <span key={groupName} className="rounded-full border bg-white px-2 py-1 text-xs text-zinc-700">
@@ -556,20 +559,20 @@ export default function Interfaces() {
                     </div>
                   ) : (
                     <div className="rounded-lg border bg-zinc-50 p-3 text-sm text-zinc-500">
-                      这条落地节点还没有被任何出口线路使用。
+                      这个最终出口节点还没有被任何出口线路使用。
                     </div>
                   )}
 
                   {!landing.enabled && (
                     <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 p-2 rounded">
                       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                      <p>停用后，绑定它的线路不会继续往这个节点转发，相关本地入口会进入降级状态。</p>
+                      <p>停用后，相关出口线路不会继续转发到这里，本地代理会进入降级状态。</p>
                     </div>
                   )}
 
                   <div className="flex items-center gap-2 pt-2 border-t">
-                    <Button variant="outline" size="sm" onClick={() => openEditLanding(landing)}><Pencil className="h-3.5 w-3.5 mr-1" /> 编辑落地节点</Button>
-                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setPendingDeleteLandingName(landing.name)}><Trash2 className="h-3.5 w-3.5 mr-1" /> 删除落地节点</Button>
+                    <Button variant="outline" size="sm" onClick={() => openEditLanding(landing)}><Pencil className="h-3.5 w-3.5 mr-1" /> 编辑最终出口节点</Button>
+                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setPendingDeleteLandingName(landing.name)}><Trash2 className="h-3.5 w-3.5 mr-1" /> 删除最终出口节点</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -589,7 +592,7 @@ export default function Interfaces() {
             tone="warning"
             icon={<AlertTriangle className="h-4 w-4" />}
             title="还不能创建出口线路"
-            description="因为系统里还没有可用订阅。先去“订阅与节点”页导入订阅，AXIS 拿到节点后，这里才能继续往下配。"
+            description="因为还没导入订阅。先去“订阅与节点”填入订阅链接。"
           />
         )}
 
@@ -601,7 +604,7 @@ export default function Interfaces() {
               className="lg:col-span-2"
               icon={<Network className="h-5 w-5" />}
               title="还没有任何出口线路"
-              description="先新建一条线路，把节点按地区或用途整理好。后面本地入口就只需要绑定线路，不用直接碰原始节点列表。"
+              description="先新建一条线路，把节点按地区或用途整理好。本地代理只需要选线路，不用翻节点列表。"
               action={
                 <Button onClick={() => { setGroupForm({ ...emptyGroupForm }); setShowAddGroup(true) }} disabled={subscriptionNames.length === 0}>
                   <FolderPlus className="h-4 w-4" />
@@ -619,8 +622,8 @@ export default function Interfaces() {
                         {g.name}
                         {g.providerMissing && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-normal">订阅已删除</span>}
                         {g.providerDisabled && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal">订阅已停用</span>}
-                        {g.landingMissing && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-normal">落地已删除</span>}
-                        {g.landingDisabled && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal">落地已停用</span>}
+                        {g.landingMissing && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-normal">出口已删除</span>}
+                        {g.landingDisabled && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal">出口已停用</span>}
                       </CardTitle>
                       <CardDescription className="mt-1">数据来源：{g.provider}</CardDescription>
                     </div>
@@ -630,7 +633,7 @@ export default function Interfaces() {
                 <CardContent>
                   <div className="flex gap-2 text-xs text-zinc-500 mb-3 flex-wrap">
                     <span className="bg-zinc-100 px-2 py-1 rounded">{g.mode === 'fallback' ? `顺序节点 ${g.candidateCount}` : `可用节点 ${g.candidateCount}`}</span>
-                    <span className="bg-zinc-100 px-2 py-1 rounded truncate max-w-[180px]" title={g.current || '还没有选中的节点'}>当前出口 {g.current || '还没有选中的节点'}</span>
+                    <span className="bg-zinc-100 px-2 py-1 rounded truncate max-w-[180px]" title={g.current || '还没有选中的节点'}>当前节点 {g.current || '还没有选中的节点'}</span>
                     <span className="bg-zinc-100 px-2 py-1 rounded truncate max-w-[260px]" title={buildRouteSummary(g)}>实际路径 {buildRouteSummary(g)}</span>
                     <span className="bg-zinc-100 px-2 py-1 rounded">{g.landingProxy ? `最终出口 ${g.landingProxy}` : '最终出口 直接出公网'}</span>
                   </div>
@@ -690,13 +693,13 @@ export default function Interfaces() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>新建一条出口线路</DialogTitle>
-            <DialogDescription>为一组节点取个更好理解的名字，后面本地入口就能直接使用这条线路。</DialogDescription>
+            <DialogDescription>为一组节点取个更好理解的名字，后面本地代理就能直接选这条线路。</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>线路名称</Label>
               <Input placeholder="例如：香港日常、日本流媒体、自动选择" value={groupForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGroupForm({ ...groupForm, name: e.target.value })} />
-              <p className="text-xs leading-5 text-zinc-500">建议直接用用途或地区命名，后面绑定入口时会更容易看懂。</p>
+              <p className="text-xs leading-5 text-zinc-500">建议按用途或地区命名，后面配置本地代理时更容易选对。</p>
             </div>
             <div className="space-y-2">
               <Label>数据来源</Label>
@@ -709,7 +712,7 @@ export default function Interfaces() {
             <div className="space-y-2">
               <Label>最终出口</Label>
               <Select value={landingSelectValue(groupForm.landing_proxy)} onValueChange={(val: string) => setGroupForm({ ...groupForm, landing_proxy: val === NO_LANDING_VALUE ? '' : val })}>
-                <SelectTrigger><SelectValue placeholder="直接出公网，或者选择一个落地节点" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="直接出公网，或选择一个最终出口" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_LANDING_VALUE}>直接出公网</SelectItem>
                   {(landingProxies || []).map((landing) => (
@@ -719,7 +722,7 @@ export default function Interfaces() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs leading-5 text-zinc-500">如果这里选了落地节点，实际路径会先经过当前节点，再从这个落地节点出公网。</p>
+              <p className="text-xs leading-5 text-zinc-500">选了最终出口后，流量会先走订阅节点，再从最终出口出公网。</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -773,7 +776,7 @@ export default function Interfaces() {
             <div className="space-y-2">
               <Label>最终出口</Label>
               <Select value={landingSelectValue(groupForm.landing_proxy)} onValueChange={(val: string) => setGroupForm({ ...groupForm, landing_proxy: val === NO_LANDING_VALUE ? '' : val })}>
-                <SelectTrigger><SelectValue placeholder="直接出公网，或者选择一个落地节点" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="直接出公网，或选择一个最终出口" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_LANDING_VALUE}>直接出公网</SelectItem>
                   {(landingProxies || []).map((landing) => (
@@ -845,7 +848,7 @@ export default function Interfaces() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>编辑顺序容灾组：{editingFallbackGroupName}</DialogTitle>
-            <DialogDescription>你可以调整订阅源、顺位列表、健康检查频率和最终落地出口。</DialogDescription>
+            <DialogDescription>你可以调整订阅源、顺位列表、健康检查频率和最终出口。</DialogDescription>
           </DialogHeader>
           <FallbackGroupEditor
             fallbackForm={fallbackForm}
@@ -867,14 +870,14 @@ export default function Interfaces() {
       <Dialog open={showAddLanding} onOpenChange={setShowAddLanding}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>添加一个落地节点</DialogTitle>
-            <DialogDescription>这里配置的是最终出口。如果出口线路绑定了它，流量会先经过订阅节点，再从这个节点出公网。</DialogDescription>
+            <DialogTitle>添加一个最终出口节点</DialogTitle>
+            <DialogDescription>配置一个固定的最终出口。出口线路选了它后，会先走订阅节点，再从这里出公网。</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>节点名称</Label>
-                <Input placeholder="例如：日本固定出口、新加坡落地" value={landingForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, name: e.target.value })} />
+                <Input placeholder="例如：日本固定出口、新加坡固定出口" value={landingForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLandingForm({ ...landingForm, name: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label>协议</Label>
@@ -915,14 +918,14 @@ export default function Interfaces() {
               <div className="space-y-2">
                 <Label className="opacity-0">状态</Label>
                 <div className="rounded-lg border bg-zinc-50 px-3 py-2 text-sm text-zinc-600">
-                  这条落地节点创建后，就可以在出口线路里直接选用了。
+                  这个最终出口节点创建后，就可以在出口线路里直接选用了。
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
                 <Switch checked={landingForm.enabled} onCheckedChange={(checked: boolean) => setLandingForm({ ...landingForm, enabled: checked })} />
-                <Label>启用这条落地节点</Label>
+                <Label>启用这个最终出口节点</Label>
               </div>
               <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
                 <Switch checked={landingForm.tls} onCheckedChange={(checked: boolean) => setLandingForm({ ...landingForm, tls: checked })} />
@@ -936,7 +939,7 @@ export default function Interfaces() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddLanding(false)}>取消</Button>
-            <Button onClick={handleAddLanding} disabled={landingSubmitting}>{landingSubmitting ? '创建中...' : '创建落地节点'}</Button>
+            <Button onClick={handleAddLanding} disabled={landingSubmitting}>{landingSubmitting ? '创建中...' : '创建最终出口节点'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -944,8 +947,8 @@ export default function Interfaces() {
       <Dialog open={showEditLanding} onOpenChange={setShowEditLanding}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>编辑落地节点：{editingLandingName}</DialogTitle>
-            <DialogDescription>修改这里会影响所有绑定了这条落地路径的出口线路。</DialogDescription>
+            <DialogTitle>编辑最终出口节点：{editingLandingName}</DialogTitle>
+            <DialogDescription>修改会影响所有使用这个最终出口的出口线路。</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
@@ -1001,7 +1004,7 @@ export default function Interfaces() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditLanding(false)}>取消</Button>
-            <Button onClick={handleEditLanding} disabled={landingSubmitting}>{landingSubmitting ? '保存中...' : '保存落地节点'}</Button>
+            <Button onClick={handleEditLanding} disabled={landingSubmitting}>{landingSubmitting ? '保存中...' : '保存最终出口节点'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1012,7 +1015,7 @@ export default function Interfaces() {
           if (!open) setPendingDeleteGroupName(null)
         }}
         title="删除这条出口线路后会发生什么？"
-        description={pendingDeleteGroupName ? `“${pendingDeleteGroupName}”删除后，已经绑定它的本地入口不会一起被删，但会暂时失去可用线路，需要你重新选择。` : ''}
+        description={pendingDeleteGroupName ? `“${pendingDeleteGroupName}”删除后，相关本地代理不会被一起删除，但会暂时失去可用线路，需要你重新选择。` : ''}
         confirmLabel="确认删除"
         destructive
         confirming={deletingGroup}
@@ -1024,7 +1027,7 @@ export default function Interfaces() {
         onOpenChange={(open) => {
           if (!open) setPendingDeleteLandingName(null)
         }}
-        title="删除这个落地节点后会发生什么？"
+        title="删除这个最终出口节点后会发生什么？"
         description={pendingDeleteLandingName ? `“${pendingDeleteLandingName}”删除后，已经绑定它的出口线路会失去最终出口，需要你重新指定。` : ''}
         confirmLabel="确认删除"
         destructive
@@ -1076,7 +1079,7 @@ function FallbackGroupEditor({
       <div className="space-y-2">
         <Label>最终出口</Label>
         <Select value={landingSelectValue(fallbackForm.landing_proxy)} onValueChange={(val: string) => setFallbackForm({ ...fallbackForm, landing_proxy: val === NO_LANDING_VALUE ? '' : val })}>
-          <SelectTrigger><SelectValue placeholder="直接出公网，或者选择一个落地节点" /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="直接出公网，或选择一个最终出口" /></SelectTrigger>
           <SelectContent>
             <SelectItem value={NO_LANDING_VALUE}>直接出公网</SelectItem>
             {landingProxies.map((landing) => <SelectItem key={landing.name} value={landing.name}>{landing.name}{landing.enabled ? '' : '（已停用）'}</SelectItem>)}

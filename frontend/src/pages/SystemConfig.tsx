@@ -1,6 +1,7 @@
 import { Suspense, lazy, useState, useEffect } from 'react'
 import useSWR from 'swr'
-import { api, ApiError } from '@/services/api'
+import { api } from '@/services/api'
+import { apiKeys } from '@/services/api-keys'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,9 @@ import { Save, RefreshCw, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
+import { validatePasswordPair } from '@/lib/password'
+import { mutateMany } from '@/lib/swr'
+import { toastApiError } from '@/lib/toast-api-error'
 
 const Editor = lazy(() => import('@monaco-editor/react'))
 
@@ -25,13 +29,13 @@ function EditorFallback({ label }: { label: string }) {
 }
 
 export default function SystemConfig() {
-  const { data: configData, mutate: mutateConfig } = useSWR('/api/config', api.getConfig)
-  const { data: renderedData, mutate: mutateRendered } = useSWR('/api/rendered-config', api.getRenderedConfig)
-  const { data: versionsData, mutate: mutateVersions } = useSWR('/api/mihomo/versions', api.getMihomoVersions)
-  const { data: hostData, mutate: mutateHost } = useSWR('/api/host/status', api.getHostStatus, {
+  const { data: configData, mutate: mutateConfig } = useSWR(apiKeys.config, api.getConfig)
+  const { data: renderedData, mutate: mutateRendered } = useSWR(apiKeys.renderedConfig, api.getRenderedConfig)
+  const { data: versionsData, mutate: mutateVersions } = useSWR(apiKeys.mihomoVersions, api.getMihomoVersions)
+  const { data: hostData, mutate: mutateHost } = useSWR(apiKeys.hostStatus, api.getHostStatus, {
     refreshInterval: 5000,
   })
-  const { data: updaterData, mutate: mutateUpdater } = useSWR('/api/host/updater', api.getUpdaterStatus, {
+  const { data: updaterData, mutate: mutateUpdater } = useSWR(apiKeys.updaterStatus, api.getUpdaterStatus, {
     refreshInterval: 5000,
   })
   
@@ -67,10 +71,9 @@ export default function SystemConfig() {
       await api.saveConfig({ config: parsedConfig })
       
       toast.success('配置已保存')
-      mutateConfig()
-      mutateRendered() // Saving often triggers a re-render on backend
+      void mutateMany(mutateConfig, mutateRendered) // 保存通常会触发后端重新渲染
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '保存失败')
+      toastApiError(err, '保存失败')
     } finally {
       setIsSaving(false)
     }
@@ -87,11 +90,9 @@ export default function SystemConfig() {
       const data = await actionMap[action](version)
       if (!data.ok) throw new Error(`${action} 失败`)
       toast.success(`Mihomo ${version} 已${action === "download" ? "下载" : action === "install" ? "安装" : "激活"}`)
-      mutateVersions()
-      mutateConfig()
-      mutateRendered()
+      void mutateMany(mutateVersions, mutateConfig, mutateRendered)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "操作失败")
+      toastApiError(err, "操作失败")
     } finally {
       setVersionActionKey("")
     }
@@ -104,7 +105,7 @@ export default function SystemConfig() {
       toast.success(checked ? '已启用开机自启' : '已关闭开机自启')
       mutateHost()
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '更新失败')
+      toastApiError(err, '更新失败')
     } finally {
       setIsUpdatingAutostart(false)
     }
@@ -117,7 +118,7 @@ export default function SystemConfig() {
       toast.success(hostData?.desktopMode ? '桌面控制台已拉起' : '已触发宿主动作')
       mutateHost()
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '打开失败')
+      toastApiError(err, '打开失败')
     } finally {
       setIsOpeningHost(false)
     }
@@ -130,9 +131,29 @@ export default function SystemConfig() {
       toast.success('已触发桌面更新检查')
       mutateUpdater()
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '检查失败')
+      toastApiError(err, '检查失败')
     } finally {
       setIsCheckingUpdates(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    const passwordError = validatePasswordPair(newPassword, confirmPassword)
+    if (passwordError) {
+      toast.error(passwordError)
+      return
+    }
+
+    setIsChangingPassword(true)
+    try {
+      await api.updatePassword({ password: newPassword })
+      toast.success("密码修改成功")
+      setNewPassword("")
+      setConfirmPassword("")
+    } catch (err) {
+      toastApiError(err, "修改失败")
+    } finally {
+      setIsChangingPassword(false)
     }
   }
 
@@ -144,13 +165,13 @@ export default function SystemConfig() {
       <PageHeader
         eyebrow="System"
         title="系统与核心"
-        description="这里放的是低频但关键的设置，比如管理员密码、高级配置内容和 Mihomo 版本。日常使用时，你大多数时候不需要停留在这里。"
+        description="管理员密码、高级配置、代理核心版本都在这里。需要时再来。"
       />
 
       <NoticeCard
         icon={<RefreshCw className="h-4 w-4" />}
-        title="什么时候需要来这个页面"
-        description="只有在你要修改管理员密码、直接编辑高级配置，或者切换 Mihomo 版本时，才需要进入这里。其他日常操作尽量在订阅、线路和本地入口页面完成。"
+        title="你可能会用到这里"
+        description="改管理员密码、编辑高级配置、切换核心版本时再来。日常操作尽量在订阅、线路和本地代理页完成。"
       />
 
       <Tabs defaultValue="editor" className="flex-1 flex flex-col min-h-0">
@@ -261,30 +282,7 @@ export default function SystemConfig() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
-              <Button 
-                onClick={async () => {
-                  if (newPassword !== confirmPassword) {
-                    toast.error("两次输入的密码不一致")
-                    return
-                  }
-                  if (newPassword.length < 6) {
-                    toast.error("密码长度至少为 6 位")
-                    return
-                  }
-                  setIsChangingPassword(true)
-                  try {
-                    await api.updatePassword({ password: newPassword })
-                    toast.success("密码修改成功")
-                    setNewPassword("")
-                    setConfirmPassword("")
-                  } catch (err) {
-                    toast.error(err instanceof ApiError ? err.message : "修改失败")
-                  } finally {
-                    setIsChangingPassword(false)
-                  }
-                }} 
-                disabled={isChangingPassword || !newPassword || !confirmPassword}
-              >
+              <Button onClick={handleChangePassword} disabled={isChangingPassword || !newPassword || !confirmPassword}>
                 {isChangingPassword ? "提交中..." : "保存新密码"}
               </Button>
             </CardContent>
@@ -303,13 +301,13 @@ export default function SystemConfig() {
               <CardContent className="pt-6 space-y-4 text-sm">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-lg bg-zinc-50 p-3">
-                    <div className="text-zinc-500 text-xs mb-1">运行模式</div>
-                    <div className="font-medium">{hostData?.mode === 'desktop' ? 'desktop / Wails' : hostData?.mode || '加载中...'}</div>
+                    <div className="text-zinc-500 text-xs mb-1">运行形态</div>
+                    <div className="font-medium">{hostData?.mode === 'desktop' ? '桌面版' : hostData?.mode === 'web' ? 'Web 服务' : hostData?.mode || '加载中...'}</div>
                   </div>
                   <div className="rounded-lg bg-zinc-50 p-3">
                     <div className="text-zinc-500 text-xs mb-1">开机自启</div>
                     <div className="font-medium">
-                      {hostData?.autostartManaged ? (hostData?.autostartEnabled ? '已启用' : '未启用') : '当前模式不支持'}
+                      {hostData?.autostartManaged ? (hostData?.autostartEnabled ? '已启用' : '未启用') : '当前环境不支持'}
                     </div>
                   </div>
                   <div className="rounded-lg bg-zinc-50 p-3">
@@ -327,7 +325,7 @@ export default function SystemConfig() {
                     <div className="space-y-1">
                       <div className="font-medium">宿主动作</div>
                       <p className="text-xs text-zinc-500">
-                        桌面模式下会直接唤起当前 Wails 窗口；Web 模式下不会暴露本地壳能力。
+                        桌面版会拉起窗口；Web 服务不会提供此能力。
                       </p>
                     </div>
                     <Button
@@ -354,7 +352,7 @@ export default function SystemConfig() {
                 <CardHeader className="py-4 border-b bg-zinc-50/50">
                   <CardTitle className="text-base">开机自启</CardTitle>
                   <CardDescription className="text-xs">
-                    当前只在桌面宿主中可配置。Web 服务模式不会替你接管系统启动项。
+                    只有桌面版支持开机自启。Web 服务不提供这个开关。
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
@@ -362,7 +360,7 @@ export default function SystemConfig() {
                     <div className="space-y-1">
                       <div className="font-medium">启用开机自启</div>
                       <p className="text-xs text-zinc-500">
-                        {hostData?.autostartManaged ? '由当前宿主管理系统启动项。' : '当前运行模式不支持。'}
+                        {hostData?.autostartManaged ? '由桌面版管理系统启动项。' : '当前环境不支持。'}
                       </p>
                     </div>
                     <Switch
@@ -543,9 +541,9 @@ export default function SystemConfig() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 space-y-3 text-sm">
-                  <div className="rounded-lg bg-zinc-50 p-3 font-mono break-all">/api/openapi.json</div>
+                  <div className="rounded-lg bg-zinc-50 p-3 font-mono break-all">{apiKeys.openapiJson}</div>
                   <Button asChild variant="outline" size="sm">
-                    <a href="/api/openapi.json" target="_blank" rel="noreferrer">打开接口说明</a>
+                    <a href={apiKeys.openapiJson} target="_blank" rel="noreferrer">打开接口说明</a>
                   </Button>
                 </CardContent>
               </Card>

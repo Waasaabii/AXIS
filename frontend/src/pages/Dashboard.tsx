@@ -9,36 +9,37 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, ApiError } from '@/services/api'
+import { apiKeys } from '@/services/api-keys'
 
 function formatMode(mode?: string) {
-  return mode === 'render-only' ? '先保存配置，再手动应用' : '保存后可直接接管代理核心'
+  return mode === 'render-only' ? '只保存配置' : '保存后自动生效'
 }
 
 function buildNextSteps(setupRequired: boolean, warningCount: number) {
   if (setupRequired) {
     return [
-      { title: '完成首次初始化', description: '先准备密码、订阅和本地入口，系统才会真正可用。', to: '/setup' },
-      { title: '导入你的订阅', description: '把服务商给的订阅链接导入进来，先让节点进系统。', to: '/subscriptions' },
-      { title: '创建本地入口', description: '配置一个可供浏览器或设备连接的本地代理端口。', to: '/listeners' },
+      { title: '完成首次初始化', description: '先把密码、订阅和本地代理配好，系统才真正可用。', to: '/setup' },
+      { title: '导入订阅', description: '填入订阅链接，让节点进系统。', to: '/subscriptions' },
+      { title: '配置本地代理', description: '生成一个设备可连接的代理地址。', to: '/listeners' },
     ]
   }
   if (warningCount > 0) {
     return [
-      { title: '处理运行提醒', description: '先看运行状态页，定位当前还没准备好的部分。', to: '/status' },
-      { title: '检查出口线路', description: '确认常用线路都有可选节点，没有空线路。', to: '/interfaces' },
-      { title: '查看最近操作记录', description: '如果刚改过配置，可以从记录里追溯发生了什么。', to: '/events' },
+      { title: '处理运行提醒', description: '先看运行状态，定位缺口。', to: '/status' },
+      { title: '检查出口线路', description: '确认常用线路都有可用节点。', to: '/interfaces' },
+      { title: '查看最近记录', description: '回溯最近变更和原因。', to: '/events' },
     ]
   }
   return [
-    { title: '继续整理出口线路', description: '把机场节点按地区或用途分组，后续绑定更省心。', to: '/interfaces' },
-    { title: '准备新的本地入口', description: '给不同设备或场景分配独立入口，管理更清晰。', to: '/listeners' },
-    { title: '检查 Mihomo 版本', description: '如果你要切换核心版本，可以去系统与核心页处理。', to: '/system' },
+    { title: '继续整理出口线路', description: '按地区或用途整理节点。', to: '/interfaces' },
+    { title: '再建一个本地代理', description: '给不同设备单独一个地址。', to: '/listeners' },
+    { title: '检查核心版本', description: '需要切换时去系统页处理。', to: '/system' },
   ]
 }
 
 export default function Dashboard() {
-  const { data: status, error } = useSWR('/api/status', api.getStatus)
-  const { data: setupState } = useSWR('/api/setup-state', api.getSetupState)
+  const { data: status, error } = useSWR(apiKeys.status, api.getStatus)
+  const { data: setupState } = useSWR(apiKeys.setupState, api.getSetupState)
 
   if (error) {
     return <div className="text-red-500">{error instanceof ApiError ? error.message : '加载失败'}</div>
@@ -57,7 +58,7 @@ export default function Dashboard() {
       <PageHeader
         eyebrow="Overview"
         title="先看系统现在能不能用"
-        description="这里不会堆技术细节，只回答三件事：系统是否就绪、哪里还缺配置、你接下来最该点哪里。"
+        description="这里只告诉你三件事：能不能用、还缺什么、下一步去哪。"
       />
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
@@ -67,10 +68,10 @@ export default function Dashboard() {
           title={setupRequired ? '还差几步才能开始稳定使用' : warningCount > 0 ? '系统能运行，但还有提醒建议先处理' : '系统已经进入可用状态'}
           description={
             setupRequired
-              ? '你现在可以继续浏览页面，但建议先完成初始化任务，避免后面每一步都被配置缺口打断。'
+              ? '建议先完成初始化，避免后面每一步都被缺口打断。'
               : warningCount > 0
-                ? '核心功能已经在线，但还有环境或运行提醒。先处理这些问题，后面会更省心。'
-                : '订阅、线路、本地入口和运行环境目前都没有明显阻塞项，可以继续做更细的线路整理。'
+                ? '能用，但还有提醒。先处理会更稳。'
+                : '目前没有明显阻塞项，可以继续整理线路。'
           }
           action={
             <div className="flex flex-wrap gap-3">
@@ -89,12 +90,12 @@ export default function Dashboard() {
         <Card className="border-zinc-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">当前工作方式</CardTitle>
-            <CardDescription>这会影响你保存配置后，系统是否会立即接管代理核心。</CardDescription>
+            <CardDescription>这会影响你保存配置后是否会自动生效。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="text-2xl font-semibold tracking-tight text-zinc-950">{formatMode(status.app.mode)}</div>
             <p className="text-sm leading-6 text-zinc-600">
-              {status.app.renderOnly ? '当前更适合先确认配置内容，等你准备好再手动让它生效。' : '保存后系统会尽量直接应用到代理核心，适合日常管理。'}
+              {status.app.renderOnly ? '当前只会保存配置，不会自动生效。' : '保存后会尽量自动应用。'}
             </p>
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
               最近一次生成配置：
@@ -114,21 +115,21 @@ export default function Dashboard() {
           icon={<Link2 className="h-4 w-4" />}
         />
         <OverviewMetric
-          title="出口线路与本地入口"
+          title="出口线路与本地代理"
           value={`${status.counts.groups} / ${status.counts.listeners}`}
-          description="已整理好的出口线路 / 可供设备连接的本地入口"
+          description="已整理的出口线路 / 已配置的本地代理"
           icon={<Network className="h-4 w-4" />}
         />
         <OverviewMetric
           title="代理核心状态"
           value={status.runtime.controllerReachable ? '连接正常' : '还没连上'}
-          description={status.runtime.controllerReachable ? 'AXIS 当前能和 Mihomo 正常通信。' : '建议去运行状态页检查控制器地址和密钥。'}
+          description={status.runtime.controllerReachable ? '代理核心已连接。' : '建议去运行状态页检查地址和密钥。'}
           icon={<ShieldCheck className="h-4 w-4" />}
         />
         <OverviewMetric
           title="待处理提醒"
           value={String(warningCount)}
-          description={warningCount === 0 ? '目前没有需要你立刻处理的提醒。' : '建议优先处理这些提醒，避免后续出现配置偏差。'}
+          description={warningCount === 0 ? '当前没有需要立刻处理的提醒。' : '建议先处理这些提醒。'}
           icon={<Settings2 className="h-4 w-4" />}
         />
       </div>
@@ -136,8 +137,8 @@ export default function Dashboard() {
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card className="border-zinc-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base">你接下来最该做的三件事</CardTitle>
-            <CardDescription>按这个顺序处理，最不容易走弯路。</CardDescription>
+            <CardTitle className="text-base">下一步建议</CardTitle>
+            <CardDescription>按这个顺序来，少走弯路。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {nextSteps.map((item, index) => (
@@ -164,7 +165,7 @@ export default function Dashboard() {
         <Card className="border-zinc-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">当前情况</CardTitle>
-            <CardDescription>这里只保留你此刻真正会关心的信息。</CardDescription>
+            <CardDescription>只展示关键状态。</CardDescription>
           </CardHeader>
           <CardContent>
             <dl className="space-y-4 text-sm">
@@ -172,7 +173,7 @@ export default function Dashboard() {
               <SummaryRow label="启动时间" value={format(new Date(status.app.startedAt), 'PP HH:mm:ss', { locale: zhCN })} />
               <SummaryRow label="当前工作方式" value={formatMode(status.runtime.mode)} />
               <SummaryRow label="最近一次应用结果" value={status.runtime.lastApplyMessage || '还没有应用记录'} />
-              <SummaryRow label="本地入口是否已准备好" value={status.counts.listeners > 0 ? '已准备' : '还没有'} />
+              <SummaryRow label="本地代理是否已配置" value={status.counts.listeners > 0 ? '已配置' : '还没有'} />
             </dl>
           </CardContent>
         </Card>

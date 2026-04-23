@@ -8,13 +8,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { api, ApiError } from "@/services/api"
+import { api } from "@/services/api"
+import { apiKeys } from "@/services/api-keys"
+import { mutateKeys } from "@/lib/swr"
+import { toastApiError } from "@/lib/toast-api-error"
 
 export default function Login() {
   const navigate = useNavigate()
   const { mutate } = useSWRConfig()
-  const { data: session } = useSWR("/api/session", api.getSession)
-  const { data: bootstrap } = useSWR("/api/bootstrap/status", api.getBootstrapStatus)
+  const { data: session } = useSWR(apiKeys.session, api.getSession)
+  const { data: bootstrap } = useSWR(apiKeys.bootstrapStatus, api.getBootstrapStatus)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -37,14 +40,11 @@ export default function Login() {
 
     try {
       await api.login({ username, password })
-      await Promise.all([
-        mutate("/api/session"),
-        mutate("/api/bootstrap/status"),
-      ])
+      await mutateKeys(mutate, [apiKeys.session, apiKeys.bootstrapStatus])
       toast.success("登录成功。")
       navigate("/launch", { replace: true })
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "登录失败，请检查账号和密码。")
+      toastApiError(err, "登录失败，请检查账号和密码。")
     } finally {
       setIsLoading(false)
     }
@@ -60,7 +60,7 @@ export default function Login() {
             <div className="space-y-3">
               <h1 className="text-4xl font-semibold tracking-tight text-zinc-950">用更少的步骤，管理你的代理路径。</h1>
               <p className="max-w-md text-sm leading-7 text-zinc-600">
-                AXIS 把订阅、线路、本地入口和系统状态整理成更容易理解的流程。登录后，你会先看到当前系统是否可用，以及接下来最该做什么。
+                AXIS 把订阅、线路、本地代理和运行状态整理成更清晰的步骤。登录后先看是否可用，再决定下一步做什么。
               </p>
             </div>
           </div>
@@ -73,7 +73,7 @@ export default function Login() {
             <FeatureItem
               icon={<Sparkles className="h-4 w-4" />}
               title="把复杂概念翻译成人话"
-              description="订阅、线路、本地入口和运行状态，都尽量用目标导向的表达来呈现。"
+              description="订阅、线路、本地代理和运行状态，尽量用目标导向的方式呈现。"
             />
           </div>
         </div>
@@ -82,7 +82,7 @@ export default function Login() {
           <CardHeader className="space-y-2 px-8 pt-8 text-left">
             <CardTitle className="text-3xl font-semibold tracking-tight text-zinc-950">登录 AXIS</CardTitle>
             <CardDescription className="text-sm leading-6 text-zinc-600">
-              输入已经初始化完成的管理员账号和密码。若当前还没创建管理员账号，AXIS 会直接把你送回 Setup 页先完成首次初始化。
+              输入管理员账号和密码。如果还没创建管理员账号，会先带你去完成首次初始化。
             </CardDescription>
           </CardHeader>
           <CardContent className="px-8 pb-8">
