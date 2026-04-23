@@ -1,8 +1,9 @@
 # ============================================================================
 #  AXIS (Anycast X-Proxy Integration System) 配置文件模板
-#  首次运行 ./start.sh 或 sudo ./service.sh install 时，
-#  系统会自动复制本文件为 config/proxyrelay.yaml。
-#  请勿将 config/proxyrelay.yaml 提交到版本控制。
+#  运行态只允许保留在 AXIS_HOME/config/proxyrelay.yaml
+#  或开发 profile 的 AXIS_HOME/dev/config/proxyrelay.yaml
+#  或显式覆盖后的 PROXYRELAY_CONFIG。
+#  仓库内只保留这份模板，不再保留 config/proxyrelay.yaml。
 # ============================================================================
 
 server:
@@ -12,7 +13,7 @@ server:
 
 admin:
   username: admin
-  password: ""           # 留空配合 password_hash 为空 → 首次使用 admin/admin 登录并强制改密
+  password: ""           # 留空配合 password_hash 为空 → 该 profile 视为未初始化，启动后会要求先创建管理员账号和密码
   password_hash: ""
   session_secret: ""
   session_ttl_hours: 12

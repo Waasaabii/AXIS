@@ -3,21 +3,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveDevConfigPath, resolveDevHome } from "./axis-paths.mjs";
+import { getGoCommand, resolveGoEnv } from "./go-env.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 
-function getGoCommand() {
-  return process.platform === "win32" ? "go.exe" : "go";
-}
-
 async function main() {
   const child = spawn(getGoCommand(), ["run", "./cmd/axis", "reset-setup", resolveDevConfigPath()], {
     cwd: repoRoot,
-    env: {
-      ...process.env,
+    env: resolveGoEnv({
       AXIS_HOME: resolveDevHome(),
-    },
+    }),
     stdio: "inherit",
   });
 

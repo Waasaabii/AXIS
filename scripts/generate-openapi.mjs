@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getGoCommand, resolveGoEnv } from "./go-env.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -13,15 +14,11 @@ function getPnpmCommand() {
   return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 }
 
-function getGoCommand() {
-  return process.platform === "win32" ? "go.exe" : "go";
-}
-
 async function capture(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: repoRoot,
-      env: process.env,
+      env: command === getGoCommand() ? resolveGoEnv() : process.env,
       stdio: ["ignore", "pipe", "pipe"],
     });
 

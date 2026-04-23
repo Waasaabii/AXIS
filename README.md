@@ -84,6 +84,23 @@ cd AXIS
 pnpm install
 ```
 
+### 额外说明：Go 代理
+
+仓库根目录里的常用脚本现在会统一给 Go 命令注入一条可回退的代理链：
+
+```text
+https://goproxy.cn|https://proxy.golang.org|direct
+```
+
+这里使用 `|` 而不是 `,`，目的是在代理超时、TLS 握手失败等网络错误时也能继续回退，而不是只在模块不存在时回退。
+
+如果你已经自己设置了 `GOPROXY`，仓库脚本会直接沿用，不会覆盖。
+如果你只想临时给 AXIS 指定另一条代理链，又不想改全局 Go 环境，可以这样启动：
+
+```bash
+AXIS_GOPROXY=https://goproxy.io|direct pnpm dev:desktop
+```
+
 ### 3. 启动开发环境
 
 ```bash
@@ -354,7 +371,14 @@ pnpm build:desktop
 
 ## 配置文件
 
-`config/proxyrelay.yaml` 已被 `.gitignore` 排除，不会提交到版本控制。仓库中保留的是 `config/proxyrelay.example.yaml` 模板。
+仓库内不再保留运行态配置文件。
+仓库只保留 [`config/proxyrelay.example.yaml`](config/proxyrelay.example.yaml) 这份模板。
+
+真实会生效的配置只允许落在：
+
+- 默认正式运行目录：`AXIS_HOME/config/proxyrelay.yaml`
+- 默认开发 profile：`AXIS_HOME/dev/config/proxyrelay.yaml`
+- 显式覆盖后的 `PROXYRELAY_CONFIG`
 
 如果你直接运行 AXIS CLI 或桌面应用，而没有显式设置 `PROXYRELAY_CONFIG`，默认配置文件路径是：
 
@@ -364,11 +388,18 @@ Windows: %APPDATA%/AXIS/config/proxyrelay.yaml
 Linux:   ~/.config/AXIS/config/proxyrelay.yaml
 ```
 
-如果你通过 `service.sh` 或 systemd 部署，服务模板会显式设置自己的配置文件路径，例如：
+如果你通过 systemd 部署（参考 `deploy/install-ubuntu.sh`），服务模板会显式设置自己的配置文件路径，例如：
 
 ```text
 /etc/proxyrelay/proxyrelay.yaml
 ```
+
+开发入口 `pnpm dev` 和 `pnpm dev:desktop` 现在也只会：
+
+1. 复用开发 profile 已有配置
+2. 或在开发 profile 首次生成时使用仓库模板 `config/proxyrelay.example.yaml`
+
+它们不会再读取或生成仓库内 `config/proxyrelay.yaml`。
 
 ### 推荐理解顺序
 
@@ -585,32 +616,25 @@ runtime:
 
 ## systemd 部署
 
-项目自带 `service.sh`，可以把 AXIS 安装为 systemd 服务。
+仓库内提供了：
+
+- `deploy/install-ubuntu.sh`：Ubuntu/Debian 一键安装脚本
+- `deploy/proxyrelayd.service`、`deploy/mihomo.service`：systemd service 模板
 
 ### 安装
 
 ```bash
-sudo ./service.sh install
+sudo ./deploy/install-ubuntu.sh
 ```
-
-这个命令会完成：
-
-- 准备运行目录
-- 生成生产配置
-- 安装前端构建产物
-- 渲染初始运行态配置
-- 注册 `proxyrelayd` 和 `mihomo` 两个 systemd 服务
 
 ### 常用管理命令
 
 ```bash
-sudo ./service.sh start
-sudo ./service.sh stop
-sudo ./service.sh restart
-sudo ./service.sh status
-sudo ./service.sh logs
-sudo ./service.sh reset-password
-sudo ./service.sh uninstall
+sudo systemctl enable --now proxyrelayd
+sudo systemctl enable --now mihomo
+
+journalctl -u proxyrelayd -f
+journalctl -u mihomo -f
 ```
 
 ## 防火墙建议
@@ -645,11 +669,15 @@ AXIS/
 │   └── axis/                 # Go 后端核心实现
 ├── scripts/
 │   ├── axis-paths.mjs        # AXIS userData / dev profile 路径计算
+│   ├── config-template.mjs   # 仓库配置模板读取
+│   ├── dev-config.mjs        # 开发 profile 配置生成（唯一归属点）
 │   ├── dev.mjs               # Web 开发入口
 │   ├── desktop-dev.mjs       # 桌面开发入口
 │   ├── desktop-build.mjs     # 桌面构建与签名后处理
+│   ├── generate-openapi.mjs  # OpenAPI 生成
+│   ├── go-env.mjs            # Go 环境（GOPROXY/GOSUMDB/缓存）统一入口
+│   ├── go-run.mjs            # Go 运行入口
 │   └── reset-setup.mjs       # 重置开发 profile，重新走 Setup
-├── service.sh                # systemd 服务管理脚本
 ├── package.json
 ├── pnpm-workspace.yaml
 └── README.md

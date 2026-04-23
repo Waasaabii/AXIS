@@ -3,16 +3,14 @@ import { access, mkdir, readdir, rm } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoConfigTemplatePath } from "./config-template.mjs";
+import { getGoCommand, resolveGoEnv } from "./go-env.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const desktopDir = path.join(repoRoot, "desktop");
 const desktopBuildBinDir = path.join(desktopDir, "build", "bin");
 const desktopTmpDir = path.join(repoRoot, ".tmp", "desktop");
-
-function getGoCommand() {
-  return process.platform === "win32" ? "go.exe" : "go";
-}
 
 function getPnpmCommand() {
   return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -50,18 +48,11 @@ function run(command, args, cwd, extraEnv = {}) {
 }
 
 async function resolveBuildConfigPath() {
-  const candidates = [
-    path.join(repoRoot, "config", "proxyrelay.yaml"),
-    path.join(repoRoot, "config", "proxyrelay.example.yaml"),
-  ];
-
-  for (const candidate of candidates) {
-    if (await fileExists(candidate)) {
-      return candidate;
-    }
+  const templatePath = resolveRepoConfigTemplatePath();
+  if (await fileExists(templatePath)) {
+    return templatePath;
   }
-
-  throw new Error("未找到桌面构建所需配置：config/proxyrelay.yaml 或 config/proxyrelay.example.yaml");
+  throw new Error("未找到桌面构建所需配置模板：config/proxyrelay.example.yaml");
 }
 
 async function findMacAppBundle() {
@@ -133,9 +124,9 @@ async function main() {
   }
 
   await run(getPnpmCommand(), ["run", "openapi:generate"], repoRoot);
-  await run(getGoCommand(), args, desktopDir, {
+  await run(getGoCommand(), args, desktopDir, resolveGoEnv({
     PROXYRELAY_CONFIG: buildConfigPath,
-  });
+  }));
   if (!dryRun) {
     await postProcessMacBundle();
   }

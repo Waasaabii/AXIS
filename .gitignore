@@ -2,6 +2,8 @@ node_modules/
 runtime/
 !runtime/.gitkeep
 config/runtime/
+.tmp/
+desktop/build/
 *.log
 .DS_Store
 .ace-tool/

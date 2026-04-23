@@ -1,30 +1,22 @@
 import { spawn } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
+import { access } from "node:fs/promises";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
-import YAML from "yaml";
-import { resolveDevConfigPath, resolveDevHome, resolveDevRuntimeDir } from "./axis-paths.mjs";
+
+import { writeDevConfig } from "./dev-config.mjs";
+import { getGoCommand, resolveGoEnv } from "./go-env.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
-const axisHome = resolveDevHome();
-const runtimeDir = resolveDevRuntimeDir();
-const localConfigPath = resolveDevConfigPath();
 
 const args = new Set(process.argv.slice(2));
 const renderOnlyMode = args.has("--render-only");
 const managedMode = !renderOnlyMode;
 
-const serverHost = process.env.AXIS_SERVER_HOST || "127.0.0.1";
-const serverPort = Number(process.env.AXIS_SERVER_PORT || 8787);
 const uiHost = process.env.AXIS_UI_HOST || "127.0.0.1";
 const uiPort = Number(process.env.AXIS_UI_PORT || 5173);
-const controllerHost = process.env.AXIS_CONTROLLER_HOST || "127.0.0.1";
-const controllerPort = Number(process.env.AXIS_CONTROLLER_PORT || 11235);
-const controllerSecret = process.env.AXIS_CONTROLLER_SECRET || "proxyrelay-local-secret";
-const mihomoBinary = process.env.AXIS_MIHOMO_BIN || process.env.MIHOMO_BIN || "mihomo";
 
 const processes = [];
 let shuttingDown = false;
@@ -39,8 +31,13 @@ function getPnpmCommand() {
 
 const frontendWorkspaceName = "@axis/frontend";
 
-function getGoCommand() {
-  return process.platform === "win32" ? "go.exe" : "go";
+async function fileExists(targetPath) {
+  try {
+    await access(targetPath, fsConstants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getExecutableCandidates(binary) {
@@ -59,15 +56,6 @@ function getExecutableCandidates(binary) {
   return pathEntries.flatMap((entry) =>
     extensions.map((extension) => path.join(entry, process.platform === "win32" ? `${binary}${extension}` : binary)),
   );
-}
-
-async function fileExists(targetPath) {
-  try {
-    await access(targetPath, fsConstants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function resolveExecutable(binary) {
@@ -158,56 +146,14 @@ async function shutdown(reason, code = 0) {
   process.exit(code);
 }
 
-async function readSourceConfig() {
-  const candidates = [
-    localConfigPath,
-    path.join(repoRoot, "config", "proxyrelay.yaml"),
-    path.join(repoRoot, "config", "proxyrelay.example.yaml"),
-  ];
-
-  for (const candidate of candidates) {
-    if (await fileExists(candidate)) {
-      return YAML.parse(await readFile(candidate, "utf8")) || {};
-    }
-  }
-
-  throw new Error("未找到 config/proxyrelay.yaml 或 config/proxyrelay.example.yaml");
-}
-
-async function writeDevConfig() {
-  const source = await readSourceConfig();
-  const config = JSON.parse(JSON.stringify(source));
-
-  config.server = {
-    ...(config.server || {}),
-    host: serverHost,
-    port: serverPort,
-  };
-  config.runtime = {
-    ...(config.runtime || {}),
-    workdir: "../runtime",
-    render_only: !managedMode,
-    mihomo_binary: mihomoBinary,
-    external_controller: `http://${controllerHost}:${controllerPort}`,
-    external_secret: controllerSecret,
-  };
-
-  await mkdir(path.dirname(localConfigPath), { recursive: true });
-  await mkdir(runtimeDir, { recursive: true });
-  await writeFile(localConfigPath, YAML.stringify(config), "utf8");
-
-  return config;
-}
-
-async function runPreflight() {
+async function runPreflight(profile) {
   return new Promise((resolve, reject) => {
     const child = spawn(getGoCommand(), ["run", "./cmd/axis", "preflight"], {
       cwd: repoRoot,
-      env: {
-        ...process.env,
-        AXIS_HOME: axisHome,
-        PROXYRELAY_CONFIG: localConfigPath,
-      },
+      env: resolveGoEnv({
+        AXIS_HOME: profile.axisHome,
+        PROXYRELAY_CONFIG: profile.configPath,
+      }),
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -219,14 +165,14 @@ async function runPreflight() {
   });
 }
 
-async function waitForController() {
-  const url = `http://${controllerHost}:${controllerPort}/version`;
+async function waitForController(profile) {
+  const url = `http://${profile.controllerHost}:${profile.controllerPort}/version`;
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
       const response = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${controllerSecret}`,
+          Authorization: `Bearer ${profile.controllerSecret}`,
         },
       });
       if (response.ok) {
@@ -242,15 +188,20 @@ async function waitForController() {
   throw new Error(`Mihomo controller 未在 ${url} 就绪`);
 }
 
-async function startManagedRuntime() {
-  const executable = await resolveExecutable(mihomoBinary);
+async function startManagedRuntime(profile) {
+  const executable = await resolveExecutable(profile.mihomoBinary);
   if (!executable) {
-    throw new Error(`未找到 mihomo 可执行文件: ${mihomoBinary}`);
+    throw new Error(`未找到 mihomo 可执行文件: ${profile.mihomoBinary}`);
   }
 
-  await runPreflight();
-  spawnProcess("mihomo", executable, ["-d", runtimeDir, "-f", path.join(runtimeDir, "mihomo.yaml")]);
-  await waitForController();
+  await runPreflight(profile);
+  spawnProcess("mihomo", executable, [
+    "-d",
+    profile.runtimeDir,
+    "-f",
+    path.join(profile.runtimeDir, "mihomo.yaml"),
+  ]);
+  await waitForController(profile);
 }
 
 async function main() {
@@ -261,32 +212,37 @@ async function main() {
     shutdown("收到 SIGTERM，正在停止开发环境...").catch(() => process.exit(1));
   });
 
-  await writeDevConfig();
+  const profile = await writeDevConfig({ renderOnlyMode });
 
   if (managedMode) {
-    await startManagedRuntime();
+    await startManagedRuntime(profile);
   }
 
   const backendEnv = {
-    AXIS_HOME: axisHome,
-    PROXYRELAY_CONFIG: localConfigPath,
+    AXIS_HOME: profile.axisHome,
+    PROXYRELAY_CONFIG: profile.configPath,
     AXIS_UI_DEV_URL: `http://${uiHost}:${uiPort}`,
   };
   const frontendEnv = {
-    AXIS_SERVER_HOST: serverHost,
-    AXIS_SERVER_PORT: String(serverPort),
+    AXIS_SERVER_HOST: profile.serverHost,
+    AXIS_SERVER_PORT: String(profile.serverPort),
     AXIS_UI_HOST: uiHost,
     AXIS_UI_PORT: String(uiPort),
   };
 
-  spawnProcess("axis", getGoCommand(), ["run", "./cmd/axis", "serve"], backendEnv);
-  spawnProcess("ui", getPnpmCommand(), ["--filter", frontendWorkspaceName, "dev", "--host", uiHost, "--port", String(uiPort)], frontendEnv);
+  spawnProcess("axis", getGoCommand(), ["run", "./cmd/axis", "serve"], resolveGoEnv(backendEnv));
+  spawnProcess(
+    "ui",
+    getPnpmCommand(),
+    ["--filter", frontendWorkspaceName, "dev", "--host", uiHost, "--port", String(uiPort)],
+    frontendEnv,
+  );
 
   log(`React 开发服务器: http://${uiHost}:${uiPort}`);
-  log(`AXIS API 地址: http://${serverHost}:${serverPort}`);
-  log(`AXIS 控制台入口: http://${serverHost}:${serverPort}`);
+  log(`AXIS API 地址: http://${profile.serverHost}:${profile.serverPort}`);
+  log(`AXIS 控制台入口: http://${profile.serverHost}:${profile.serverPort}`);
   if (managedMode) {
-    log(`Mihomo Controller: http://${controllerHost}:${controllerPort}`);
+    log(`Mihomo Controller: http://${profile.controllerHost}:${profile.controllerPort}`);
   } else {
     log("当前为仅渲染配置模式，如需启用完整运行时能力请直接使用 pnpm dev");
   }
