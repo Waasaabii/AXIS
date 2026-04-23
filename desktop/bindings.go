@@ -56,23 +56,30 @@ func (s *desktopSession) invalidateIfFingerprintChanged(fingerprint string) {
 }
 
 type EngineBindings struct {
-	engine  *axis.EngineFacade
+	service *axis.Service
 	session *desktopSession
 }
 
 type HostBindings struct {
-	host *axis.HostFacade
+	service *axis.Service
 }
 
-func NewEngineBindings(engine *axis.EngineFacade) *EngineBindings {
+func NewEngineBindings(service *axis.Service) *EngineBindings {
 	return &EngineBindings{
-		engine:  engine,
+		service: service,
 		session: &desktopSession{},
 	}
 }
 
-func NewHostBindings(host *axis.HostFacade) *HostBindings {
-	return &HostBindings{host: host}
+func NewHostBindings(service *axis.Service) *HostBindings {
+	return &HostBindings{service: service}
+}
+
+func (e *EngineBindings) serviceOrError() (*axis.Service, error) {
+	if e == nil || e.service == nil {
+		return nil, errors.New("service 未初始化")
+	}
+	return e.service, nil
 }
 
 func bindingError(result map[string]any, status int) error {
@@ -93,7 +100,11 @@ func (e *EngineBindings) GetSession() (map[string]any, error) {
 		return nil, err
 	}
 	valid, username := e.session.status()
-	return e.engine.GetSessionStatus(valid, username)
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.SessionStatus(valid, username), nil
 }
 
 func (e *EngineBindings) GetBootstrapStatus() (axis.BootstrapStatus, error) {
@@ -101,59 +112,60 @@ func (e *EngineBindings) GetBootstrapStatus() (axis.BootstrapStatus, error) {
 		return axis.BootstrapStatus{}, err
 	}
 	valid, username := e.session.status()
-	return e.engine.GetBootstrapStatus(valid, username)
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.BootstrapStatus{}, err
+	}
+	return service.GetBootstrapStatus(valid, username), nil
 }
 
 func (e *EngineBindings) Login(payload map[string]any) (map[string]any, error) {
-	username, _ := payload["username"].(string)
-	password, _ := payload["password"].(string)
-	result, status, err := e.engine.Login(username, password)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	username, _ := payload["username"].(string)
+	password, _ := payload["password"].(string)
+	result, status := service.Login(username, password)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
-	fingerprint, err := e.engine.AuthFingerprint()
-	if err != nil {
-		return nil, err
-	}
+	fingerprint := service.AuthFingerprint()
 	e.session.setAuthenticated(username, fingerprint)
 	return result, nil
 }
 
 func (e *EngineBindings) Logout() (map[string]any, error) {
 	e.session.clear()
-	return e.engine.Logout()
+	return map[string]any{"ok": true}, nil
 }
 
 func (e *EngineBindings) UpdatePassword(payload map[string]any) (map[string]any, error) {
-	password, _ := payload["password"].(string)
-	result, status, err := e.engine.UpdatePassword(password)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	password, _ := payload["password"].(string)
+	result, status := service.UpdatePassword(password)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
 	valid, username := e.session.status()
 	if valid {
-		fingerprint, fpErr := e.engine.AuthFingerprint()
-		if fpErr != nil {
-			return nil, fpErr
-		}
+		fingerprint := service.AuthFingerprint()
 		e.session.setAuthenticated(username, fingerprint)
 	}
 	return result, nil
 }
 
 func (e *EngineBindings) BootstrapAdmin(payload map[string]any) (map[string]any, error) {
-	username, _ := payload["username"].(string)
-	password, _ := payload["password"].(string)
-	result, status, err := e.engine.BootstrapAdmin(username, password)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	username, _ := payload["username"].(string)
+	password, _ := payload["password"].(string)
+	result, status := service.BootstrapAdmin(username, password)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -162,26 +174,31 @@ func (e *EngineBindings) BootstrapAdmin(payload map[string]any) (map[string]any,
 }
 
 func (e *EngineBindings) GetStatus() (map[string]any, error) {
-	return e.engine.GetStatus()
-}
-
-func (e *EngineBindings) GetConfig() (map[string]any, error) {
-	return e.engine.GetConfig()
-}
-
-func (e *EngineBindings) SaveConfig(payload map[string]any) (map[string]any, error) {
-	configPayload, ok := payload["config"].(map[string]any)
-	if !ok {
-		configPayload = payload
-	}
-	config, err := axis.DecodeConfigPayload(configPayload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
-	result, status, saveErr := e.engine.SaveConfig(config)
-	if saveErr != nil {
-		return nil, saveErr
+	return service.GetStatus(), nil
+}
+
+func (e *EngineBindings) GetConfig() (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
 	}
+	return service.GetConfig(), nil
+}
+
+func (e *EngineBindings) SaveConfig(payload map[string]any) (map[string]any, error) {
+	config, err := axis.DecodeConfigPayload(payload)
+	if err != nil {
+		return nil, err
+	}
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.SaveConfigFromAPI(config)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -189,31 +206,52 @@ func (e *EngineBindings) SaveConfig(payload map[string]any) (map[string]any, err
 }
 
 func (e *EngineBindings) GetProviders() ([]map[string]any, error) {
-	return e.engine.GetProviders()
-}
-
-func (e *EngineBindings) RefreshProvider(name string) (map[string]any, error) {
-	return e.engine.RefreshProvider(name)
-}
-
-func (e *EngineBindings) GetGroups() ([]axis.GroupView, error) {
-	return e.engine.GetGroups()
-}
-
-func (e *EngineBindings) GetTransitRoutes() ([]axis.TransitRouteView, error) {
-	return e.engine.GetTransitRoutes()
-}
-
-func (e *EngineBindings) GetLandingProxies() ([]axis.LandingProxyView, error) {
-	return e.engine.GetLandingProxies()
-}
-
-func (e *EngineBindings) SelectGroup(groupName string, payload map[string]any) (map[string]any, error) {
-	proxyName, _ := payload["proxyName"].(string)
-	result, status, err := e.engine.SelectGroup(groupName, proxyName)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	return service.GetProviders(), nil
+}
+
+func (e *EngineBindings) RefreshProvider(name string) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.RefreshProvider(name), nil
+}
+
+func (e *EngineBindings) GetGroups() ([]axis.GroupView, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.GetGroups(), nil
+}
+
+func (e *EngineBindings) GetTransitRoutes() ([]axis.TransitRouteView, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.GetTransitRoutes(), nil
+}
+
+func (e *EngineBindings) GetLandingProxies() ([]axis.LandingProxyView, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.GetLandingProxies(), nil
+}
+
+func (e *EngineBindings) SelectGroup(groupName string, payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	proxyName, _ := payload["proxyName"].(string)
+	result, status := service.SelectGroup(groupName, proxyName)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -221,10 +259,11 @@ func (e *EngineBindings) SelectGroup(groupName string, payload map[string]any) (
 }
 
 func (e *EngineBindings) HealthcheckGroup(groupName string) (map[string]any, error) {
-	result, status, err := e.engine.HealthcheckGroup(groupName)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.RunHealthcheck(groupName)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -232,10 +271,11 @@ func (e *EngineBindings) HealthcheckGroup(groupName string) (map[string]any, err
 }
 
 func (e *EngineBindings) AddTransitRoute(payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.AddTransitRoute(payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.AddTransitRoute(payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -243,10 +283,11 @@ func (e *EngineBindings) AddTransitRoute(payload map[string]any) (map[string]any
 }
 
 func (e *EngineBindings) UpdateTransitRoute(name string, payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.UpdateTransitRoute(name, payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.UpdateTransitRoute(name, payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -254,10 +295,11 @@ func (e *EngineBindings) UpdateTransitRoute(name string, payload map[string]any)
 }
 
 func (e *EngineBindings) DeleteTransitRoute(name string) (map[string]any, error) {
-	result, status, err := e.engine.DeleteTransitRoute(name)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.RemoveTransitRoute(name)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -265,10 +307,11 @@ func (e *EngineBindings) DeleteTransitRoute(name string) (map[string]any, error)
 }
 
 func (e *EngineBindings) HealthcheckTransitRoute(name string) (map[string]any, error) {
-	result, status, err := e.engine.HealthcheckTransitRoute(name)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.RunTransitRouteHealthcheck(name)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -276,10 +319,11 @@ func (e *EngineBindings) HealthcheckTransitRoute(name string) (map[string]any, e
 }
 
 func (e *EngineBindings) AddLandingProxy(payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.AddLandingProxy(payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.AddLandingProxy(payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -287,10 +331,11 @@ func (e *EngineBindings) AddLandingProxy(payload map[string]any) (map[string]any
 }
 
 func (e *EngineBindings) UpdateLandingProxy(name string, payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.UpdateLandingProxy(name, payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.UpdateLandingProxy(name, payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -298,10 +343,11 @@ func (e *EngineBindings) UpdateLandingProxy(name string, payload map[string]any)
 }
 
 func (e *EngineBindings) DeleteLandingProxy(name string) (map[string]any, error) {
-	result, status, err := e.engine.DeleteLandingProxy(name)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.RemoveLandingProxy(name)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -309,14 +355,19 @@ func (e *EngineBindings) DeleteLandingProxy(name string) (map[string]any, error)
 }
 
 func (e *EngineBindings) GetListeners() ([]axis.ListenerView, error) {
-	return e.engine.GetListeners()
-}
-
-func (e *EngineBindings) AddListener(payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.AddListener(payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	return service.GetListeners(), nil
+}
+
+func (e *EngineBindings) AddListener(payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.AddListener(payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -324,10 +375,11 @@ func (e *EngineBindings) AddListener(payload map[string]any) (map[string]any, er
 }
 
 func (e *EngineBindings) UpdateListener(name string, payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.UpdateListener(name, payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.UpdateListener(name, payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -335,10 +387,11 @@ func (e *EngineBindings) UpdateListener(name string, payload map[string]any) (ma
 }
 
 func (e *EngineBindings) DeleteListener(name string) (map[string]any, error) {
-	result, status, err := e.engine.DeleteListener(name)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.RemoveListener(name)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -346,38 +399,67 @@ func (e *EngineBindings) DeleteListener(name string) (map[string]any, error) {
 }
 
 func (e *EngineBindings) GetEvents() ([]axis.EventEntry, error) {
-	return e.engine.GetEvents()
-}
-
-func (e *EngineBindings) GetRenderedConfig() (map[string]any, error) {
-	return e.engine.GetRenderedConfig()
-}
-
-func (e *EngineBindings) GetController() (map[string]any, error) {
-	return e.engine.GetControllerStatus()
-}
-
-func (e *EngineBindings) GetSetupState() (axis.SetupState, error) {
-	return e.engine.GetSetupState()
-}
-
-func (e *EngineBindings) GetRuntimePreflight() (axis.RuntimePreflightSnapshot, error) {
-	return e.engine.GetRuntimePreflight()
-}
-
-func (e *EngineBindings) ProbeController() (map[string]any, error) {
-	return e.engine.ProbeController()
-}
-
-func (e *EngineBindings) ReloadRuntime() (map[string]any, error) {
-	return e.engine.ReloadRuntime()
-}
-
-func (e *EngineBindings) AddSubscription(payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.AddSubscription(payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	return service.GetEvents(), nil
+}
+
+func (e *EngineBindings) GetRenderedConfig() (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.GetRenderedConfig()
+}
+
+func (e *EngineBindings) GetController() (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.GetControllerStatus(), nil
+}
+
+func (e *EngineBindings) GetSetupState() (axis.SetupState, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.SetupState{}, err
+	}
+	return service.GetSetupState(), nil
+}
+
+func (e *EngineBindings) GetRuntimePreflight() (axis.RuntimePreflightSnapshot, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.RuntimePreflightSnapshot{}, err
+	}
+	return service.GetRuntimePreflight(), nil
+}
+
+func (e *EngineBindings) ProbeController() (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.ProbeController(), nil
+}
+
+func (e *EngineBindings) ReloadRuntime() (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.ReloadConfig(), nil
+}
+
+func (e *EngineBindings) AddSubscription(payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.AddSubscription(payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -385,10 +467,11 @@ func (e *EngineBindings) AddSubscription(payload map[string]any) (map[string]any
 }
 
 func (e *EngineBindings) UpdateSubscription(name string, payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.UpdateSubscription(name, payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.UpdateSubscription(name, payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -396,10 +479,11 @@ func (e *EngineBindings) UpdateSubscription(name string, payload map[string]any)
 }
 
 func (e *EngineBindings) ToggleSubscription(name string, payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.ToggleSubscription(name, payloadBool(payload, "enabled"))
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.ToggleSubscription(name, payloadBool(payload, "enabled"))
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -407,10 +491,11 @@ func (e *EngineBindings) ToggleSubscription(name string, payload map[string]any)
 }
 
 func (e *EngineBindings) DeleteSubscription(name string) (map[string]any, error) {
-	result, status, err := e.engine.DeleteSubscription(name)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.RemoveSubscription(name)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -418,10 +503,11 @@ func (e *EngineBindings) DeleteSubscription(name string) (map[string]any, error)
 }
 
 func (e *EngineBindings) AddEgressGroup(payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.AddEgressGroup(payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.AddEgressGroup(payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -429,10 +515,11 @@ func (e *EngineBindings) AddEgressGroup(payload map[string]any) (map[string]any,
 }
 
 func (e *EngineBindings) UpdateEgressGroup(name string, payload map[string]any) (map[string]any, error) {
-	result, status, err := e.engine.UpdateEgressGroup(name, payload)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.UpdateEgressGroup(name, payload)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -440,10 +527,11 @@ func (e *EngineBindings) UpdateEgressGroup(name string, payload map[string]any) 
 }
 
 func (e *EngineBindings) DeleteEgressGroup(name string) (map[string]any, error) {
-	result, status, err := e.engine.DeleteEgressGroup(name)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.RemoveEgressGroup(name)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -451,14 +539,19 @@ func (e *EngineBindings) DeleteEgressGroup(name string) (map[string]any, error) 
 }
 
 func (e *EngineBindings) GetMihomoVersions() (axis.MihomoVersionsResponse, error) {
-	return e.engine.GetMihomoVersions()
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.MihomoVersionsResponse{}, err
+	}
+	return service.MihomoVersions()
 }
 
 func (e *EngineBindings) DownloadMihomoVersion(version string) (map[string]any, error) {
-	result, status, err := e.engine.DownloadMihomoVersion(version)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.DownloadMihomoVersion(version)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -466,10 +559,11 @@ func (e *EngineBindings) DownloadMihomoVersion(version string) (map[string]any, 
 }
 
 func (e *EngineBindings) InstallMihomoVersion(version string) (map[string]any, error) {
-	result, status, err := e.engine.InstallMihomoVersion(version)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.InstallMihomoVersion(version)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -477,10 +571,11 @@ func (e *EngineBindings) InstallMihomoVersion(version string) (map[string]any, e
 }
 
 func (e *EngineBindings) ActivateMihomoVersion(version string) (map[string]any, error) {
-	result, status, err := e.engine.ActivateMihomoVersion(version)
+	service, err := e.serviceOrError()
 	if err != nil {
 		return nil, err
 	}
+	result, status := service.ActivateMihomoVersion(version)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}
@@ -488,23 +583,38 @@ func (e *EngineBindings) ActivateMihomoVersion(version string) (map[string]any, 
 }
 
 func (h *HostBindings) GetStatus() (axis.HostStatus, error) {
-	return h.host.GetStatus()
+	if h == nil || h.service == nil {
+		return axis.HostStatus{}, errors.New("service 未初始化")
+	}
+	return h.service.GetHostStatus(), nil
 }
 
 func (h *HostBindings) GetUpdaterStatus() (axis.UpdaterStatus, error) {
-	return h.host.GetUpdaterStatus()
+	if h == nil || h.service == nil {
+		return axis.UpdaterStatus{}, errors.New("service 未初始化")
+	}
+	return h.service.GetUpdaterStatus(), nil
 }
 
 func (h *HostBindings) OpenControlCenter() (map[string]any, error) {
-	return h.host.OpenControlCenter("")
+	if h == nil || h.service == nil {
+		return nil, errors.New("service 未初始化")
+	}
+	return h.service.OpenHostControlCenter("")
 }
 
 func (h *HostBindings) SetAutostart(enabled bool) (map[string]any, error) {
-	return h.host.SetAutostart(enabled)
+	if h == nil || h.service == nil {
+		return nil, errors.New("service 未初始化")
+	}
+	return h.service.SetHostAutostart(enabled)
 }
 
 func (h *HostBindings) CheckForUpdates() (map[string]any, error) {
-	return h.host.CheckForUpdates()
+	if h == nil || h.service == nil {
+		return nil, errors.New("service 未初始化")
+	}
+	return h.service.CheckForUpdates()
 }
 
 func payloadBool(payload map[string]any, key string) bool {
@@ -513,20 +623,21 @@ func payloadBool(payload map[string]any, key string) bool {
 }
 
 func (e *EngineBindings) syncSessionState() error {
-	if e == nil || e.engine == nil || e.session == nil {
+	if e == nil || e.session == nil {
 		return nil
 	}
-	reloaded, err := e.engine.RefreshExternalState()
+	service, err := e.serviceOrError()
+	if err != nil {
+		return err
+	}
+	reloaded, err := service.RefreshIfConfigChanged()
 	if err != nil {
 		return err
 	}
 	if reloaded {
 		e.session.clear()
 	}
-	fingerprint, err := e.engine.AuthFingerprint()
-	if err != nil {
-		return err
-	}
+	fingerprint := service.AuthFingerprint()
 	e.session.invalidateIfFingerprintChanged(fingerprint)
 	return nil
 }

@@ -65,8 +65,11 @@ func TestResetSetup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if resetConfig.Admin.Password != "admin" {
-		t.Fatalf("expected bootstrap password fallback, got %q", resetConfig.Admin.Password)
+	if resetConfig.Admin.Password != "" {
+		t.Fatalf("expected bootstrap password to be empty, got %q", resetConfig.Admin.Password)
+	}
+	if !resetConfig.Admin.RequiresPasswordReset {
+		t.Fatalf("expected password reset requirement to be enabled")
 	}
 	if resetConfig.Admin.PasswordHash != "" {
 		t.Fatalf("expected password hash to be cleared, got %q", resetConfig.Admin.PasswordHash)

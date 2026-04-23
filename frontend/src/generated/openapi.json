@@ -191,17 +191,8 @@
       },
       "AdminConfig": {
         "properties": {
-          "password": {
-            "type": "string"
-          },
-          "password_hash": {
-            "type": "string"
-          },
           "requires_password_reset": {
             "type": "boolean"
-          },
-          "session_secret": {
-            "type": "string"
           },
           "session_ttl_hours": {
             "type": "integer"
@@ -212,9 +203,6 @@
         },
         "required": [
           "username",
-          "password",
-          "password_hash",
-          "session_secret",
           "session_ttl_hours"
         ],
         "type": "object"

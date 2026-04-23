@@ -158,10 +158,6 @@ export function ToggleSubscription(arg1, arg2) {
   return window['go']['main']['EngineBindings']['ToggleSubscription'](arg1, arg2);
 }
 
-export function UpdateSubscription(arg1, arg2) {
-  return window['go']['main']['EngineBindings']['UpdateSubscription'](arg1, arg2);
-}
-
 export function UpdateEgressGroup(arg1, arg2) {
   return window['go']['main']['EngineBindings']['UpdateEgressGroup'](arg1, arg2);
 }
@@ -176,6 +172,10 @@ export function UpdateListener(arg1, arg2) {
 
 export function UpdatePassword(arg1) {
   return window['go']['main']['EngineBindings']['UpdatePassword'](arg1);
+}
+
+export function UpdateSubscription(arg1, arg2) {
+  return window['go']['main']['EngineBindings']['UpdateSubscription'](arg1, arg2);
 }
 
 export function UpdateTransitRoute(arg1, arg2) {

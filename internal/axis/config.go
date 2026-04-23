@@ -75,10 +75,6 @@ func LoadConfig(configPath string) (*Config, error) {
 		config.Runtime.RenderOnly = parsed.Runtime.RenderOnly
 	}
 
-	if config.Admin.Password == "" && config.Admin.PasswordHash == "" {
-		config.Admin.Password = "admin"
-	}
-
 	for index := range config.Subscriptions {
 		if config.Subscriptions[index].Type == "" {
 			config.Subscriptions[index].Type = "mihomo-http"

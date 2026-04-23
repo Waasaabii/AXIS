@@ -141,13 +141,10 @@ func BuildOpenAPISpec() map[string]any {
 			"type": "object",
 			"properties": map[string]any{
 				"username":                map[string]any{"type": "string"},
-				"password":                map[string]any{"type": "string"},
-				"password_hash":           map[string]any{"type": "string"},
 				"requires_password_reset": map[string]any{"type": "boolean"},
-				"session_secret":          map[string]any{"type": "string"},
 				"session_ttl_hours":       map[string]any{"type": "integer"},
 			},
-			"required": []string{"username", "password", "password_hash", "session_secret", "session_ttl_hours"},
+			"required": []string{"username", "session_ttl_hours"},
 		},
 		"RuntimeConfig": map[string]any{
 			"type": "object",

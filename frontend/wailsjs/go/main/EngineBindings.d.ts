@@ -80,8 +80,6 @@ export function SelectGroup(arg1:string,arg2:Record<string, any>):Promise<Record
 
 export function ToggleSubscription(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
 
-export function UpdateSubscription(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
-
 export function UpdateEgressGroup(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
 
 export function UpdateLandingProxy(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
@@ -89,5 +87,7 @@ export function UpdateLandingProxy(arg1:string,arg2:Record<string, any>):Promise
 export function UpdateListener(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
 
 export function UpdatePassword(arg1:Record<string, any>):Promise<Record<string, any>>;
+
+export function UpdateSubscription(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
 
 export function UpdateTransitRoute(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;

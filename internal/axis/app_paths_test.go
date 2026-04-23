@@ -33,8 +33,11 @@ func TestEnsureConfigPathCreatesDefaultConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if config.Admin.Password != "admin" {
-		t.Fatalf("expected bootstrap password, got %q", config.Admin.Password)
+	if config.Admin.Password != "" {
+		t.Fatalf("expected bootstrap password to be empty, got %q", config.Admin.Password)
+	}
+	if !config.Admin.RequiresPasswordReset {
+		t.Fatalf("expected password reset requirement to be enabled")
 	}
 	if config.Runtime.Workdir != "../runtime" {
 		t.Fatalf("unexpected runtime workdir: %s", config.Runtime.Workdir)

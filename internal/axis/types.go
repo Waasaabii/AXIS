@@ -8,10 +8,10 @@ type ServerConfig struct {
 
 type AdminConfig struct {
 	Username              string `json:"username" yaml:"username"`
-	Password              string `json:"password" yaml:"password"`
-	PasswordHash          string `json:"password_hash" yaml:"password_hash"`
+	Password              string `json:"password,omitempty" yaml:"password"`
+	PasswordHash          string `json:"password_hash,omitempty" yaml:"password_hash"`
 	RequiresPasswordReset bool   `json:"requires_password_reset,omitempty" yaml:"-"`
-	SessionSecret         string `json:"session_secret" yaml:"session_secret"`
+	SessionSecret         string `json:"session_secret,omitempty" yaml:"session_secret"`
 	SessionTTLHours       int    `json:"session_ttl_hours" yaml:"session_ttl_hours"`
 }
 

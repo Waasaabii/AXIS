@@ -31,8 +31,8 @@ func main() {
 	host.SetUpdater(updater)
 	service.SetHostIntegration(host)
 
-	engineBindings := NewEngineBindings(axis.NewEngineFacade(service))
-	hostBindings := NewHostBindings(axis.NewHostFacade(service))
+	engineBindings := NewEngineBindings(service)
+	hostBindings := NewHostBindings(service)
 	assetHandler := axis.NewServer(service)
 	staticFS, _, err := frontendassets.StaticFS()
 	if err != nil {

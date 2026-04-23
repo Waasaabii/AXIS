@@ -3133,10 +3133,7 @@ export interface components {
             upstream_proxy_name: string;
         };
         AdminConfig: {
-            password: string;
-            password_hash: string;
             requires_password_reset?: boolean;
-            session_secret: string;
             session_ttl_hours: number;
             username: string;
         };

@@ -9,7 +9,7 @@ func BuildDefaultConfig(configPath string) *Config {
 		},
 		Admin: AdminConfig{
 			Username:              "admin",
-			Password:              "admin",
+			Password:              "",
 			PasswordHash:          "",
 			SessionSecret:         "",
 			SessionTTLHours:       12,

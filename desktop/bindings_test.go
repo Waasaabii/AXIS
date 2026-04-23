@@ -26,7 +26,7 @@ func TestGetBootstrapStatusClearsDesktopSessionAfterReset(t *testing.T) {
 	}
 	defer service.Close()
 
-	bindings := NewEngineBindings(axis.NewEngineFacade(service))
+	bindings := NewEngineBindings(service)
 	if _, err := bindings.BootstrapAdmin(map[string]any{
 		"username": "owner",
 		"password": "secret123",
