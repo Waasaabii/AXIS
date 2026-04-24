@@ -157,3 +157,33 @@ func TestLocalNodeConnectionUsesDomainOnly(t *testing.T) {
 		t.Fatalf("unexpected baota response: %d %#v", status, baota)
 	}
 }
+
+func TestBuildPublishedSubscriptionForProxyRoute(t *testing.T) {
+	config := newValidProductConfig()
+	config.NodeSources = []NodeSource{{Name: "trojan-node", Type: "proxy", Enabled: true, Protocol: "trojan", Endpoint: NodeSourceEndpoint{Server: "axis.example.com", Port: 39013, Password: "secret", TLS: true, SNI: "axis.example.com"}}}
+	config.Routes = []RouteConfig{{Name: "trojan-route", Enabled: true, Entry: RouteEndpointRef{Source: "trojan-node"}}}
+	config.Usage.SelectedRoute = "trojan-route"
+	config.Publications = []PublicationConfig{{Name: "phone-sub", Type: "subscription", Enabled: true, Route: "trojan-route", Auth: PublicationAuth{Token: "token-123"}}}
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config", "proxyrelay.yaml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if _, err := WriteConfig(configPath, config); err != nil {
+		t.Fatalf("WriteConfig() error = %v", err)
+	}
+	service, err := NewService(configPath)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	defer service.Close()
+	result, err := service.BuildPublishedSubscription("token-123")
+	if err != nil {
+		t.Fatalf("BuildPublishedSubscription() error = %v", err)
+	}
+	for _, expected := range []string{"proxies:", "type: trojan", "server: axis.example.com", "MATCH,phone-sub"} {
+		if !strings.Contains(result.Content, expected) {
+			t.Fatalf("subscription missing %q:\n%s", expected, result.Content)
+		}
+	}
+}

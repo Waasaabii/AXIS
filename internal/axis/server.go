@@ -86,6 +86,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]any{"ok": false, "error": "service 未初始化"})
 		return
 	}
+	if pathname == "/sub" && method == http.MethodGet {
+		result, err := s.service.BuildPublishedSubscription(r.URL.Query().Get("token"))
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", result.Name+".yaml"))
+		_, _ = w.Write([]byte(result.Content))
+		return
+	}
 
 	validSession, username := s.sessionFromRequest(r)
 	if pathname == "/api/bootstrap/status" && method == http.MethodGet {
@@ -375,37 +386,37 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 200, s.service.RefreshProvider(name))
 			return
 		}
-			if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/update") && method == http.MethodPut {
-				name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/update")
+		if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/update") && method == http.MethodPut {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/update")
 			payload, err := readJSONBody(r)
 			if err != nil {
 				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
 				return
 			}
 			response, status := s.service.UpdateNodeSource(name, payload)
-				writeJSON(w, status, response)
-				return
-			}
-			if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/check") && method == http.MethodGet {
-				name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/check")
-				response, status := s.service.CheckLocalNode(name)
-				writeJSON(w, status, response)
-				return
-			}
-			if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/connection") && method == http.MethodGet {
-				name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/connection")
-				response, status := s.service.GetLocalNodeConnection(name)
-				writeJSON(w, status, response)
-				return
-			}
-			if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/baota-config") && method == http.MethodGet {
-				name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/baota-config")
-				response, status := s.service.GetLocalNodeBaotaConfig(name)
-				writeJSON(w, status, response)
-				return
-			}
-			if strings.HasPrefix(pathname, "/api/node-sources/") && method == http.MethodDelete {
-				name := strings.TrimPrefix(pathname, "/api/node-sources/")
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/check") && method == http.MethodGet {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/check")
+			response, status := s.service.CheckLocalNode(name)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/connection") && method == http.MethodGet {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/connection")
+			response, status := s.service.GetLocalNodeConnection(name)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/baota-config") && method == http.MethodGet {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/baota-config")
+			response, status := s.service.GetLocalNodeBaotaConfig(name)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/node-sources/") && method == http.MethodDelete {
+			name := strings.TrimPrefix(pathname, "/api/node-sources/")
 			response, status := s.service.RemoveNodeSource(name)
 			writeJSON(w, status, response)
 			return
