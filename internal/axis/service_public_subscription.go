@@ -140,7 +140,10 @@ func renderPublishedEndpoint(name, protocol string, endpoint NodeSourceEndpoint)
 	if endpoint.Password != "" {
 		item["password"] = endpoint.Password
 	}
-	if endpoint.TLS {
+	if protocol == "trojan" || protocol == "hysteria2" {
+		item["udp"] = true
+	}
+	if endpoint.TLS && protocol != "hysteria2" {
 		item["tls"] = true
 	}
 	if endpoint.SNI != "" {

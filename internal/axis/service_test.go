@@ -187,3 +187,36 @@ func TestBuildPublishedSubscriptionForProxyRoute(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildPublishedSubscriptionOutputsCompatibleHysteria2(t *testing.T) {
+	config := newValidProductConfig()
+	config.NodeSources = []NodeSource{{Name: "hy2-node", Type: "proxy", Enabled: true, Protocol: "hysteria2", Endpoint: NodeSourceEndpoint{Server: "axis.example.com", Port: 39014, Password: "secret", TLS: true, SNI: "axis.example.com"}}}
+	config.Routes = []RouteConfig{{Name: "hy2-route", Enabled: true, Entry: RouteEndpointRef{Source: "hy2-node"}}}
+	config.Usage.SelectedRoute = "hy2-route"
+	config.Publications = []PublicationConfig{{Name: "hy2-sub", Type: "subscription", Enabled: true, Route: "hy2-route", Auth: PublicationAuth{Token: "token-123"}}}
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config", "proxyrelay.yaml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if _, err := WriteConfig(configPath, config); err != nil {
+		t.Fatalf("WriteConfig() error = %v", err)
+	}
+	service, err := NewService(configPath)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	defer service.Close()
+	result, err := service.BuildPublishedSubscription("token-123")
+	if err != nil {
+		t.Fatalf("BuildPublishedSubscription() error = %v", err)
+	}
+	for _, expected := range []string{"type: hysteria2", "password: secret", "sni: axis.example.com", "udp: true"} {
+		if !strings.Contains(result.Content, expected) {
+			t.Fatalf("subscription missing %q:\n%s", expected, result.Content)
+		}
+	}
+	if strings.Contains(result.Content, "tls: true") {
+		t.Fatalf("hysteria2 subscription should not include generic tls flag:\n%s", result.Content)
+	}
+}
