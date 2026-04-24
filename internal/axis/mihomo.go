@@ -321,7 +321,7 @@ func buildRenderedListener(listener Listener, proxyName string) map[string]any {
 		"listen": firstNonEmpty(listener.Listen, "0.0.0.0"),
 		"port":   listener.Port,
 		"udp":    listener.UDP,
-		"users":  listener.Users,
+		"users":  buildRenderedListenerUsers(listener),
 		"proxy":  proxyName,
 	}
 	if listener.Certificate != "" {
@@ -334,6 +334,20 @@ func buildRenderedListener(listener Listener, proxyName string) map[string]any {
 		rendered["sni"] = listener.SNI
 	}
 	return rendered
+}
+
+func buildRenderedListenerUsers(listener Listener) any {
+	if listener.Type != "hysteria2" {
+		return listener.Users
+	}
+	users := map[string]string{}
+	for _, user := range listener.Users {
+		if user.Username == "" || user.Password == "" {
+			continue
+		}
+		users[user.Username] = user.Password
+	}
+	return users
 }
 
 func RenderMihomoConfig(config *Config) (string, error) {

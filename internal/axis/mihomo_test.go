@@ -189,3 +189,21 @@ func TestRenderMihomoConfigWithTransitRoute(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderMihomoConfigWithHysteria2LocalNodeListener(t *testing.T) {
+	config := &Config{
+		Runtime:       RuntimeConfig{ExternalController: "http://127.0.0.1:11235", ExternalSecret: "secret"},
+		Subscriptions: []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true}},
+		EgressGroups:  []EgressGroup{{Name: "daily", Provider: "airport-main", Mode: "manual"}},
+		Listeners:     []Listener{{Name: "hy2-node", Type: "hysteria2", Listen: "0.0.0.0", Port: 39014, UDP: true, Enabled: true, Users: []ListenerUser{{Username: "axis", Password: "secret"}}, Certificate: "fullchain.pem", PrivateKey: "privkey.pem", EgressGroup: "daily"}},
+	}
+	output, err := RenderMihomoConfig(config)
+	if err != nil {
+		t.Fatalf("RenderMihomoConfig() error = %v", err)
+	}
+	for _, expected := range []string{"type: hysteria2", "users:", "axis: secret", "certificate: fullchain.pem", "private-key: privkey.pem"} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("rendered config missing %q:\n%s", expected, output)
+		}
+	}
+}
