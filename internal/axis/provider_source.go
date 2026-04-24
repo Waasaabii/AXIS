@@ -11,9 +11,11 @@ import (
 )
 
 var manualProviderTypes = map[string]struct{}{
-	"http":   {},
-	"socks":  {},
-	"socks5": {},
+	"http":      {},
+	"socks":     {},
+	"socks5":    {},
+	"trojan":    {},
+	"hysteria2": {},
 }
 
 var providerFileNamePattern = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
@@ -24,10 +26,16 @@ func isManualProviderType(providerType string) bool {
 }
 
 func normalizeManualProviderType(providerType string) string {
-	if strings.EqualFold(strings.TrimSpace(providerType), "http") {
+	switch strings.ToLower(strings.TrimSpace(providerType)) {
+	case "http":
 		return "http"
+	case "trojan":
+		return "trojan"
+	case "hysteria2":
+		return "hysteria2"
+	default:
+		return "socks5"
 	}
-	return "socks5"
 }
 
 func buildManualProviderEndpoint(subscription Subscription) string {
@@ -79,7 +87,7 @@ func parseManualProviderInput(input, fallbackType string) (Subscription, error) 
 	}
 
 	if !isManualProviderType(providerType) {
-		return Subscription{}, fmt.Errorf("导入串仅支持 HTTP、SOCKS、SOCKS5")
+		return Subscription{}, fmt.Errorf("导入串仅支持 HTTP、SOCKS、SOCKS5、Trojan、Hysteria2")
 	}
 
 	if strings.Contains(remainder, "@") {
@@ -157,6 +165,15 @@ func buildManualProviderFileContent(subscription Subscription) ([]byte, error) {
 	}
 	if subscription.Password != "" {
 		proxy["password"] = subscription.Password
+	}
+	if subscription.TLS {
+		proxy["tls"] = true
+	}
+	if strings.TrimSpace(subscription.SNI) != "" {
+		proxy["sni"] = strings.TrimSpace(subscription.SNI)
+	}
+	if subscription.SkipCertVerify {
+		proxy["skip-cert-verify"] = true
 	}
 	return yaml.Marshal(map[string]any{
 		"proxies": []map[string]any{proxy},

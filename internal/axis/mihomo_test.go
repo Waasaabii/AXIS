@@ -207,3 +207,21 @@ func TestRenderMihomoConfigWithHysteria2LocalNodeListener(t *testing.T) {
 		}
 	}
 }
+
+func TestManualProviderFileSupportsTrojanAndHysteria2(t *testing.T) {
+	for _, item := range []Subscription{
+		{Name: "trojan-node", Type: "trojan", Server: "axis.example.com", Port: 39013, Password: "secret", TLS: true, SNI: "axis.example.com"},
+		{Name: "hy2-node", Type: "hysteria2", Server: "axis.example.com", Port: 39014, Password: "secret", TLS: true, SNI: "axis.example.com"},
+	} {
+		content, err := buildManualProviderFileContent(item)
+		if err != nil {
+			t.Fatalf("buildManualProviderFileContent() error = %v", err)
+		}
+		output := string(content)
+		for _, expected := range []string{"type: " + item.Type, "server: axis.example.com", "password: secret", "sni: axis.example.com"} {
+			if !strings.Contains(output, expected) {
+				t.Fatalf("manual provider missing %q:\n%s", expected, output)
+			}
+		}
+	}
+}

@@ -119,3 +119,17 @@ func TestValidateConfigAcceptsLocalNodeSource(t *testing.T) {
 		t.Fatalf("ValidateConfig() error = %v", err)
 	}
 }
+
+func TestValidateConfigAcceptsTrojanAndHysteria2ProxySources(t *testing.T) {
+	config := newValidProductConfig()
+	config.NodeSources = []NodeSource{
+		{Name: "trojan-node", Type: "proxy", Enabled: true, Protocol: "trojan", Endpoint: NodeSourceEndpoint{Server: "axis.example.com", Port: 39013, Password: "secret", TLS: true, SNI: "axis.example.com"}},
+		{Name: "hy2-node", Type: "proxy", Enabled: true, Protocol: "hysteria2", Endpoint: NodeSourceEndpoint{Server: "axis.example.com", Port: 39014, Password: "secret", TLS: true, SNI: "axis.example.com"}},
+	}
+	config.Routes = []RouteConfig{{Name: "trojan-route", Enabled: true, Entry: RouteEndpointRef{Source: "trojan-node"}}, {Name: "hy2-route", Enabled: true, Entry: RouteEndpointRef{Source: "hy2-node"}}}
+	config.Usage.SelectedRoute = "trojan-route"
+	config.Publications = nil
+	if err := ValidateConfig(config); err != nil {
+		t.Fatalf("ValidateConfig() error = %v", err)
+	}
+}

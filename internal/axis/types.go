@@ -31,6 +31,9 @@ type Subscription struct {
 	Port                int               `json:"port,omitempty" yaml:"port,omitempty"`
 	Username            string            `json:"username,omitempty" yaml:"username,omitempty"`
 	Password            string            `json:"password,omitempty" yaml:"password,omitempty"`
+	TLS                 bool              `json:"tls,omitempty" yaml:"tls,omitempty"`
+	SNI                 string            `json:"sni,omitempty" yaml:"sni,omitempty"`
+	SkipCertVerify      bool              `json:"skip_cert_verify,omitempty" yaml:"skip_cert_verify,omitempty"`
 	Interval            int               `json:"interval" yaml:"interval"`
 	Enabled             bool              `json:"enabled" yaml:"enabled"`
 	HealthCheckURL      string            `json:"health_check_url,omitempty" yaml:"health_check_url,omitempty"`

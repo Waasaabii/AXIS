@@ -400,7 +400,7 @@ func buildLegacySubscriptions(sources []NodeSource) []Subscription {
 			if source.Type == "local_node" {
 				endpoint = NodeSourceEndpoint{Server: firstNonEmpty(source.LocalNode.Listen, "127.0.0.1"), Port: source.LocalNode.Port, Username: firstLocalUser(source.LocalNode.Users).Username, Password: firstLocalUser(source.LocalNode.Users).Password, TLS: source.LocalNode.TLS, SNI: source.LocalNode.SNI}
 			}
-			items = append(items, Subscription{Name: source.Name, Type: firstNonEmpty(source.Protocol, "socks5"), Server: endpoint.Server, Port: endpoint.Port, Username: endpoint.Username, Password: endpoint.Password, Enabled: true, Interval: 3600, HealthCheckURL: "https://www.gstatic.com/generate_204", HealthCheckInterval: 300})
+			items = append(items, Subscription{Name: source.Name, Type: firstNonEmpty(source.Protocol, "socks5"), Server: endpoint.Server, Port: endpoint.Port, Username: endpoint.Username, Password: endpoint.Password, TLS: endpoint.TLS, SNI: endpoint.SNI, SkipCertVerify: endpoint.SkipCertVerify, Enabled: true, Interval: 3600, HealthCheckURL: "https://www.gstatic.com/generate_204", HealthCheckInterval: 300})
 		}
 	}
 	return items
@@ -470,8 +470,8 @@ func firstLocalUser(users []ListenerUser) ListenerUser {
 
 func normalizeLandingProtocol(protocol string) string {
 	switch protocol {
-	case "http":
-		return "http"
+	case "http", "trojan", "hysteria2":
+		return protocol
 	default:
 		return "socks5"
 	}
