@@ -1,5 +1,5 @@
 import type { components } from "@/generated/openapi"
-import type { BaotaConfigResponse, LocalNodeCheckResponse, LocalNodeConnectionResponse, NodeSource, PublicationConfig, RouteConfig, UsageView } from "./product-types"
+import type { BaotaConfigResponse, CoreCapabilitiesResponse, LLMModelsResponse, LLMProposalRequest, LLMProposalResponse, LLMTestRequest, LLMTestResponse, LocalNodeCheckResponse, LocalNodeConnectionResponse, NodeSource, PublicationConfig, RouteConfig, UsageView } from "./product-types"
 
 type Schemas = components["schemas"]
 
@@ -45,7 +45,7 @@ export type UpdateEgressGroupRequest = Schemas["UpdateEgressGroupRequest"]
 export type MihomoVersionsResponse = Schemas["MihomoVersionsResponse"]
 export type MihomoVersionActionResponse = Schemas["MihomoVersionActionResponse"]
 export type SetupStateResponse = Schemas["SetupState"]
-export type HostStatus = Schemas["HostStatus"]
+export type HostStatus = Schemas["HostStatus"] & { platform?: string }
 export type MainServiceStatus = Schemas["MainServiceStatus"]
 export type UpdaterStatus = Schemas["UpdaterStatus"]
 export type BootstrapAuthStatus = Schemas["BootstrapAuthStatus"]
@@ -71,6 +71,10 @@ export interface AxisAPI {
   updatePassword: (body: UpdatePasswordRequest) => Promise<SimpleOkResponse>
   bootstrapAdmin: (body: BootstrapAdminRequest) => Promise<SimpleOkResponse>
   getStatus: () => Promise<StatusResponse>
+  getCoreCapabilities: () => Promise<CoreCapabilitiesResponse>
+  getLLMModels: (body?: LLMTestRequest) => Promise<LLMModelsResponse>
+  testLLM: (body: LLMTestRequest) => Promise<LLMTestResponse>
+  createLLMProposal: (body: LLMProposalRequest) => Promise<LLMProposalResponse>
   getConfig: () => Promise<ConfigEnvelope>
   saveConfig: (body: SaveConfigRequest) => Promise<SaveConfigResponse>
   getNodeSources: () => Promise<NodeSource[]>

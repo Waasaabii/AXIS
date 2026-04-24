@@ -1,11 +1,13 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import AppLayout from './layouts/AppLayout'
+import DesktopShell from './layouts/DesktopShell'
 
-const Usage = lazy(() => import('./pages/Usage'))
-const Routes = lazy(() => import('./pages/Routes'))
+const Home = lazy(() => import('./pages/Home'))
+const Egress = lazy(() => import('./pages/Egress'))
+const Rules = lazy(() => import('./pages/Rules'))
 const Publications = lazy(() => import('./pages/Publications'))
-const Runtime = lazy(() => import('./pages/Runtime'))
+const Diagnostics = lazy(() => import('./pages/Diagnostics'))
 const SystemConfig = lazy(() => import('./pages/SystemConfig'))
 const Launch = lazy(() => import('./pages/Launch'))
 const Login = lazy(() => import('./pages/Login'))
@@ -20,21 +22,27 @@ function renderLazyPage(Component: LazyExoticComponent<ComponentType>) {
 }
 
 const router = createBrowserRouter([
-  { path: '/', element: <Navigate to="/usage" replace /> },
-  { path: '/launch', element: renderLazyPage(Launch) },
-  { path: '/login', element: renderLazyPage(Login) },
-  { path: '/setup', element: renderLazyPage(Setup) },
   {
-    element: <AppLayout />,
+    element: <DesktopShell />,
     children: [
-      { path: '/usage', element: renderLazyPage(Usage) },
-      { path: '/routes', element: renderLazyPage(Routes) },
-      { path: '/publications', element: renderLazyPage(Publications) },
-      { path: '/runtime', element: renderLazyPage(Runtime) },
-      { path: '/system', element: renderLazyPage(SystemConfig) },
+      { path: '/', element: <Navigate to="/home" replace /> },
+      { path: '/launch', element: renderLazyPage(Launch) },
+      { path: '/login', element: renderLazyPage(Login) },
+      { path: '/setup', element: renderLazyPage(Setup) },
+      {
+        element: <AppLayout />,
+        children: [
+          { path: '/home', element: renderLazyPage(Home) },
+          { path: '/egress', element: renderLazyPage(Egress) },
+          { path: '/rules', element: renderLazyPage(Rules) },
+          { path: '/publications', element: renderLazyPage(Publications) },
+          { path: '/diagnostics', element: renderLazyPage(Diagnostics) },
+          { path: '/system', element: renderLazyPage(SystemConfig) },
+        ],
+      },
+      { path: '*', element: <Navigate to="/launch" replace /> },
     ],
   },
-  { path: '*', element: <Navigate to="/launch" replace /> },
 ])
 
 export function AppRouter() {

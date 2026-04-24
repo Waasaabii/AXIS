@@ -135,3 +135,76 @@ export interface BaotaConfigResponse {
   warnings?: string[]
   applySupported: boolean
 }
+
+
+export interface CoreCapabilityLayer {
+  protocol: string
+  import: string
+  preserve: string
+  publish: string
+  usage: string
+  create: string
+  diagnostics: string
+  warnings?: string[]
+}
+
+export interface CoreCapabilitiesResponse {
+  coreName: string
+  coreVersion?: string
+  coreDetected: boolean
+  checkedAt: string
+  protocols: CoreCapabilityLayer[]
+  axisTemplates: string[]
+  message: string
+}
+
+export interface LLMModelInfo {
+  id: string
+  name?: string
+  displayName?: string
+  ownedBy?: string
+}
+
+export interface LLMModelsResponse {
+  ok: boolean
+  enabled: boolean
+  models: LLMModelInfo[]
+  message: string
+}
+
+export interface LLMTestRequest {
+  base_url?: string
+  api_key?: string
+  model?: string
+  endpoint?: string
+}
+
+export interface LLMTestResponse {
+  ok: boolean
+  endpoint: string
+  model: string
+  content?: string
+  message: string
+}
+
+export interface LLMProposalRequest {
+  kind: string
+  goal: string
+  target?: string
+  context?: Record<string, unknown>
+  stream?: boolean
+}
+
+export interface LLMProposalResponse {
+  ok: boolean
+  enabled: boolean
+  mode: string
+  kind: string
+  status: string
+  steps: Array<{ title: string; status: string; message: string }>
+  proposal: Record<string, unknown>
+  warnings?: string[]
+  needsTest: boolean
+  needsConfirm: boolean
+  message: string
+}

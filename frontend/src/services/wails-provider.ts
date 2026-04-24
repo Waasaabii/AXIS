@@ -44,7 +44,7 @@ import type {
   UpdateTransitRouteRequest,
 } from "./provider-types"
 import { ApiError } from "./provider-types"
-import type { BaotaConfigResponse, LocalNodeCheckResponse, LocalNodeConnectionResponse, NodeSource, PublicationConfig, RouteConfig, UsageView } from "./product-types"
+import type { BaotaConfigResponse, CoreCapabilitiesResponse, LLMModelsResponse, LLMProposalRequest, LLMProposalResponse, LLMTestRequest, LLMTestResponse, LocalNodeCheckResponse, LocalNodeConnectionResponse, NodeSource, PublicationConfig, RouteConfig, UsageView } from "./product-types"
 
 type WailsBindingMethod = (...args: unknown[]) => Promise<unknown>
 type WailsBindingGroup = Record<string, WailsBindingMethod>
@@ -89,6 +89,10 @@ export const wailsAPI: AxisAPI = {
   updatePassword: (body: UpdatePasswordRequest) => callBinding<SimpleOkResponse>("EngineBindings", "UpdatePassword", body),
   bootstrapAdmin: (body: BootstrapAdminRequest) => callBinding<SimpleOkResponse>("EngineBindings", "BootstrapAdmin", body),
   getStatus: () => callBinding<StatusResponse>("EngineBindings", "GetStatus"),
+  getCoreCapabilities: () => callBinding<CoreCapabilitiesResponse>("EngineBindings", "GetCoreCapabilities"),
+  getLLMModels: (body?: LLMTestRequest) => body ? callBinding<LLMModelsResponse>("EngineBindings", "ListLLMModelsWithConfig", body) : callBinding<LLMModelsResponse>("EngineBindings", "ListLLMModels"),
+  testLLM: (body: LLMTestRequest) => callBinding<LLMTestResponse>("EngineBindings", "TestLLM", body),
+  createLLMProposal: (body: LLMProposalRequest) => callBinding<LLMProposalResponse>("EngineBindings", "BuildLLMProposal", body),
   getConfig: () => callBinding<ConfigEnvelope>("EngineBindings", "GetConfig"),
   saveConfig: (body: SaveConfigRequest) => callBinding<SaveConfigResponse>("EngineBindings", "SaveConfig", body),
   getNodeSources: () => callBinding<NodeSource[]>("EngineBindings", "GetNodeSources"),

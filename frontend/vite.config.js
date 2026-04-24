@@ -14,6 +14,7 @@ export default defineConfig({
     server: {
         host: process.env.AXIS_UI_HOST || "127.0.0.1",
         port: Number(process.env.AXIS_UI_PORT || 5173),
+        strictPort: true,
         proxy: {
             "/api": {
                 target: "http://".concat(serverHost, ":").concat(serverPort),

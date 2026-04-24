@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { NoticeCard } from '@/components/NoticeCard'
 import { PageHeader } from '@/components/PageHeader'
-import { Save, RefreshCw, ExternalLink } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink, Brain } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
@@ -49,11 +49,22 @@ export default function SystemConfig() {
   const [isUpdatingAutostart, setIsUpdatingAutostart] = useState(false)
   const [isOpeningHost, setIsOpeningHost] = useState(false)
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false)
+  const [llmBaseUrl, setLlmBaseUrl] = useState('')
+  const [llmApiKey, setLlmApiKey] = useState('')
+  const [llmModel, setLlmModel] = useState('')
+  const [llmEndpoint, setLlmEndpoint] = useState('responses')
+  const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const [isTestingLLM, setIsTestingLLM] = useState(false)
+  const [llmModels, setLlmModels] = useState<Array<{ id: string; displayName?: string }>>([])
 
   // Sync config when loaded
   useEffect(() => {
     if (configData?.config) {
       setEditorContent(JSON.stringify(configData.config, null, 2))
+      const llm = (configData.config as any).llm || {}
+      setLlmBaseUrl(llm.base_url || '')
+      setLlmModel(llm.model || '')
+      setLlmEndpoint(llm.endpoint || 'responses')
     }
   }, [configData])
 
@@ -137,6 +148,50 @@ export default function SystemConfig() {
     }
   }
 
+  const loadLLMModels = async () => {
+    setIsLoadingModels(true)
+    try {
+      const result = await api.getLLMModels({ base_url: llmBaseUrl, api_key: llmApiKey })
+      if (!result.ok) {
+        toast.error(result.message || '模型列表读取失败')
+        return
+      }
+      setLlmModels(result.models)
+      if (!llmModel && result.models[0]?.id) setLlmModel(result.models[0].id)
+      toast.success('模型列表已读取')
+    } catch (err) {
+      toastApiError(err, '模型列表读取失败')
+    } finally {
+      setIsLoadingModels(false)
+    }
+  }
+
+  const testLLM = async () => {
+    setIsTestingLLM(true)
+    try {
+      const result = await api.testLLM({ base_url: llmBaseUrl, api_key: llmApiKey, model: llmModel, endpoint: llmEndpoint })
+      if (!result.ok) throw new Error(result.message)
+      toast.success(result.message || '模型测试通过')
+    } catch (err) {
+      toastApiError(err, '模型测试失败')
+    } finally {
+      setIsTestingLLM(false)
+    }
+  }
+
+  const saveLLMConfig = async () => {
+    if (!configData?.config) return
+    try {
+      const nextConfig = { ...(configData.config as any), llm: { enabled: true, base_url: llmBaseUrl.trim(), api_key: llmApiKey || (configData.config as any).llm?.api_key || '', model: llmModel, endpoint: llmEndpoint, timeout_seconds: 60 } }
+      await api.saveConfig({ config: nextConfig })
+      toast.success('模型设置已保存')
+      setLlmApiKey('')
+      void mutateConfig()
+    } catch (err) {
+      toastApiError(err, '保存模型设置失败')
+    }
+  }
+
   const handleChangePassword = async () => {
     const passwordError = validatePasswordPair(newPassword, confirmPassword)
     if (passwordError) {
@@ -175,10 +230,11 @@ export default function SystemConfig() {
       />
 
       <Tabs defaultValue="editor" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid w-[760px] grid-cols-5">
+        <TabsList className="grid w-[900px] grid-cols-6">
           <TabsTrigger value="editor">高级配置</TabsTrigger>
           <TabsTrigger value="rendered">当前生成结果</TabsTrigger>
           <TabsTrigger value="password">管理员密码</TabsTrigger>
+          <TabsTrigger value="llm">模型</TabsTrigger>
           <TabsTrigger value="host">宿主集成</TabsTrigger>
           <TabsTrigger value="mihomo">Mihomo 版本</TabsTrigger>
         </TabsList>
@@ -285,6 +341,43 @@ export default function SystemConfig() {
               <Button onClick={handleChangePassword} disabled={isChangingPassword || !newPassword || !confirmPassword}>
                 {isChangingPassword ? "提交中..." : "保存新密码"}
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+
+        <TabsContent value="llm" className="flex-1 flex flex-col mt-4 min-h-0">
+          <Card className="max-w-3xl border-zinc-200">
+            <CardHeader className="py-4 border-b bg-zinc-50/50">
+              <CardTitle className="flex items-center gap-2 text-base"><Brain className="h-4 w-4" />选择要使用的模型</CardTitle>
+              <CardDescription className="text-xs">地址和密钥只保存在这台设备。保存前可以先读取模型并测试一次。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>服务地址</Label>
+                  <Input value={llmBaseUrl} onChange={(event) => setLlmBaseUrl(event.target.value)} placeholder="https://example.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label>密钥</Label>
+                  <Input value={llmApiKey} onChange={(event) => setLlmApiKey(event.target.value)} type="password" placeholder={(configData?.config as any)?.llm?.api_key ? '已保存，留空表示继续使用' : '填写你的密钥'} />
+                </div>
+                <div className="space-y-2">
+                  <Label>模型</Label>
+                  <Input list="llm-models" value={llmModel} onChange={(event) => setLlmModel(event.target.value)} placeholder="例如 gpt-5.5" />
+                  <datalist id="llm-models">{llmModels.map((item) => <option key={item.id} value={item.id}>{item.displayName || item.id}</option>)}</datalist>
+                </div>
+                <div className="space-y-2">
+                  <Label>调用方式</Label>
+                  <Input value={llmEndpoint} onChange={(event) => setLlmEndpoint(event.target.value)} placeholder="responses 或 chat_completions" />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={loadLLMModels} disabled={!llmBaseUrl.trim() || isLoadingModels}>{isLoadingModels ? '读取中...' : '读取模型'}</Button>
+                <Button variant="outline" onClick={testLLM} disabled={!llmBaseUrl.trim() || !llmModel.trim() || isTestingLLM}>{isTestingLLM ? '测试中...' : '测试模型'}</Button>
+                <Button onClick={saveLLMConfig} disabled={!llmBaseUrl.trim() || !llmModel.trim()}>保存模型设置</Button>
+              </div>
+              <p className="text-sm text-zinc-500">生成规则草案时，AXIS 会优先使用这里选好的模型。模型不可用时会给出原因，并使用本地草案兜底。</p>
             </CardContent>
           </Card>
         </TabsContent>

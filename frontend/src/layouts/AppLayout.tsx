@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Activity, LogOut, Menu, Radio, RefreshCw, Route, Settings, Share2, Wrench } from 'lucide-react'
+import { Activity, Home, LogOut, Menu, RefreshCw, Route, Settings, Share2, Sparkles, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import useSWR from 'swr'
 import { api, ApiError, type SessionStatusResponse, type SetupStateResponse } from '@/services/api'
@@ -11,10 +11,11 @@ import { NoticeCard } from '@/components/NoticeCard'
 import { toastApiError } from '@/lib/toast-api-error'
 
 const navItems = [
-  { name: '使用', path: '/usage', icon: Radio, description: '让这台设备通过代理访问网络。' },
-  { name: '线路', path: '/routes', icon: Route, description: '整理节点来源，并组合成线路。' },
+  { name: '首页', path: '/home', icon: Home, description: '查看现在能不能用，并快速开始。' },
+  { name: '出口', path: '/egress', icon: Route, description: '添加节点来源，创建这台设备的节点。' },
+  { name: '规则', path: '/rules', icon: Sparkles, description: '让 AXIS 自动选择直连或出口。' },
   { name: '发布', path: '/publications', icon: Share2, description: '把线路提供给其他设备或 AXIS。' },
-  { name: '运行', path: '/runtime', icon: Activity, description: '查看状态、错误和最近记录。' },
+  { name: '诊断', path: '/diagnostics', icon: Activity, description: '查看问题、检查结果和最近记录。' },
   { name: '系统', path: '/system', icon: Settings, description: '密码、高级配置、核心版本。' },
 ]
 
@@ -31,11 +32,11 @@ export default function AppLayout() {
 
   useEffect(() => {
     if (!session?.authenticated || !setupState) return
-    if (setupState.needsPasswordReset && (location.pathname === '/' || location.pathname === '/usage')) {
+    if (setupState.needsPasswordReset && (location.pathname === '/' || location.pathname === '/home')) {
       navigate('/setup', { replace: true })
       return
     }
-    if (!setupState.required && location.pathname === '/setup') navigate('/usage', { replace: true })
+    if (!setupState.required && location.pathname === '/setup') navigate('/home', { replace: true })
   }, [session, setupState, location.pathname, navigate])
 
   const currentPage = useMemo(() => location.pathname === '/setup' ? { name: '首次初始化', description: '先完成最少准备项，再开始使用。' } : navItems.find((item) => item.path === location.pathname) ?? navItems[0], [location.pathname])
@@ -64,7 +65,7 @@ export default function AppLayout() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.96),_rgba(244,244,245,0.94)_38%,_rgba(244,244,245,0.9)_100%)]">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside className="hidden w-72 shrink-0 border-r border-zinc-200/80 bg-white/80 px-5 py-6 backdrop-blur xl:flex xl:flex-col">
-          <div className="space-y-1 px-3 pb-6"><div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-zinc-400">AXIS Console</div><div className="text-lg font-semibold tracking-tight text-zinc-950">控制台</div><p className="text-sm leading-6 text-zinc-500">使用、整理和发布代理线路都在这里完成。</p></div>
+          <div className="space-y-1 px-3 pb-6"><div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-zinc-400">AXIS Console</div><div className="text-lg font-semibold tracking-tight text-zinc-950">控制台</div><p className="text-sm leading-6 text-zinc-500">使用、出口、规则和发布都在这里完成。</p></div>
           <nav className="space-y-1">{navContent}</nav>
         </aside>
         <main className="min-w-0 flex-1">

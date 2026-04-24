@@ -45,7 +45,7 @@ import type {
 } from "./provider-types"
 import { ApiError } from "./provider-types"
 import { apiKeys, apiPath } from "./api-keys"
-import type { BaotaConfigResponse, LocalNodeCheckResponse, LocalNodeConnectionResponse, NodeSource, PublicationConfig, RouteConfig, UsageView } from "./product-types"
+import type { BaotaConfigResponse, CoreCapabilitiesResponse, LLMModelsResponse, LLMProposalRequest, LLMProposalResponse, LLMTestRequest, LLMTestResponse, LocalNodeCheckResponse, LocalNodeConnectionResponse, NodeSource, PublicationConfig, RouteConfig, UsageView } from "./product-types"
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -88,6 +88,10 @@ export const httpAPI: AxisAPI = {
   updatePassword: (body: UpdatePasswordRequest) => requestJson<SimpleOkResponse>(apiKeys.sessionPassword, { method: "PUT", body: JSON.stringify(body) }),
   bootstrapAdmin: (body: BootstrapAdminRequest) => requestJson<SimpleOkResponse>(apiKeys.setupAdmin, { method: "PUT", body: JSON.stringify(body) }),
   getStatus: () => requestJson<StatusResponse>(apiKeys.status),
+  getCoreCapabilities: () => requestJson<CoreCapabilitiesResponse>(apiKeys.coreCapabilities),
+  getLLMModels: (body?: LLMTestRequest) => body ? requestJson<LLMModelsResponse>(apiKeys.llmModels, { method: "POST", body: JSON.stringify(body) }) : requestJson<LLMModelsResponse>(apiKeys.llmModels),
+  testLLM: (body: LLMTestRequest) => requestJson<LLMTestResponse>(apiKeys.llmTest, { method: "POST", body: JSON.stringify(body) }),
+  createLLMProposal: (body: LLMProposalRequest) => requestJson<LLMProposalResponse>(apiKeys.llmProposals, { method: "POST", body: JSON.stringify(body) }),
   getConfig: () => requestJson<ConfigEnvelope>(apiKeys.config),
   saveConfig: (body: SaveConfigRequest) => requestJson<SaveConfigResponse>(apiKeys.config, { method: "PUT", body: JSON.stringify(body) }),
   getNodeSources: () => requestJson<NodeSource[]>(apiKeys.nodeSources),
