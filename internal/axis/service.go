@@ -275,17 +275,10 @@ func hasUsableSubscriptionSource(subscription Subscription) bool {
 }
 
 func BuildSetupState(config *Config) SetupState {
-	hasSubscriptions := len(config.Subscriptions) > 0
-	hasRealSubscriptions := false
-	for _, subscription := range config.Subscriptions {
-		if hasUsableSubscriptionSource(subscription) {
-			hasRealSubscriptions = true
-			break
-		}
-	}
-
-	hasEgressGroups := len(config.EgressGroups) > 0
-	hasListeners := len(config.Listeners) > 0
+	hasNodeSources := len(config.NodeSources) > 0
+	hasRoutes := len(config.Routes) > 0
+	hasUsage := config.Usage.SelectedRoute != "" && (config.Usage.LocalProxy.Enabled || config.Usage.VirtualInterface.Enabled)
+	hasPublications := len(config.Publications) > 0
 
 	checks := []SetupCheck{
 		{
@@ -296,25 +289,25 @@ func BuildSetupState(config *Config) SetupState {
 			Action:  ternaryString(config.Admin.RequiresPasswordReset, "去设置密码", ""),
 		},
 		{
-			Key:     "subscriptions",
-			Title:   "订阅源",
-			Ready:   hasRealSubscriptions,
-			Summary: ternaryString(hasRealSubscriptions, "已添加可用订阅。", "还没填写可用的订阅链接，当前显示的是示例内容。"),
-			Action:  ternaryString(hasRealSubscriptions, "", "添加订阅"),
+			Key:     "node-sources",
+			Title:   "节点来源",
+			Ready:   hasNodeSources,
+			Summary: ternaryString(hasNodeSources, "已添加节点来源。", "还没有可用的节点来源。"),
+			Action:  ternaryString(hasNodeSources, "", "添加节点来源"),
 		},
 		{
-			Key:     "egress-groups",
-			Title:   "出口组",
-			Ready:   hasEgressGroups,
-			Summary: ternaryString(hasEgressGroups, "已创建代理分组。", "还没有分组，节点还不能按地区或用途整理。"),
-			Action:  ternaryString(hasEgressGroups, "", "创建分组"),
+			Key:     "routes",
+			Title:   "线路",
+			Ready:   hasRoutes,
+			Summary: ternaryString(hasRoutes, "已创建可使用的线路。", "还没有线路，节点还不能被这台设备使用或发布。"),
+			Action:  ternaryString(hasRoutes, "", "创建线路"),
 		},
 		{
-			Key:     "listeners",
-			Title:   "入口监听",
-			Ready:   hasListeners,
-			Summary: ternaryString(hasListeners, "已创建代理入口。", "还没有代理入口，其他设备暂时还不能连接。"),
-			Action:  ternaryString(hasListeners, "", "创建入口"),
+			Key:     "usage",
+			Title:   "本机使用",
+			Ready:   hasUsage,
+			Summary: ternaryString(hasUsage, "这台设备已选择使用方式。", "还没有选择这台设备要怎么使用代理。"),
+			Action:  ternaryString(hasUsage, "", "设置使用方式"),
 		},
 	}
 
@@ -322,24 +315,28 @@ func BuildSetupState(config *Config) SetupState {
 	if config.Admin.RequiresPasswordReset {
 		reasons = append(reasons, "管理员密码还没设置。")
 	}
-	if !hasRealSubscriptions {
-		reasons = append(reasons, "还没填写可用的订阅链接。")
+	if !hasNodeSources {
+		reasons = append(reasons, "还没有添加节点来源。")
 	}
-	if !hasEgressGroups {
-		reasons = append(reasons, "还没有创建代理分组。")
+	if !hasRoutes {
+		reasons = append(reasons, "还没有创建线路。")
 	}
-	if !hasListeners {
-		reasons = append(reasons, "还没有创建代理入口。")
+	if !hasUsage {
+		reasons = append(reasons, "还没有选择这台设备的使用方式。")
 	}
 
 	return SetupState{
 		Required:             len(reasons) > 0,
 		NeedsPasswordReset:   config.Admin.RequiresPasswordReset,
 		AdminUsername:        config.Admin.Username,
-		HasSubscriptions:     hasSubscriptions,
-		HasRealSubscriptions: hasRealSubscriptions,
-		HasEgressGroups:      hasEgressGroups,
-		HasListeners:         hasListeners,
+		HasNodeSources:       hasNodeSources,
+		HasRoutes:            hasRoutes,
+		HasUsage:             hasUsage,
+		HasPublications:      hasPublications,
+		HasSubscriptions:     hasNodeSources,
+		HasRealSubscriptions: hasNodeSources,
+		HasEgressGroups:      hasRoutes,
+		HasListeners:         hasUsage,
 		Checks:               checks,
 		Reasons:              reasons,
 	}
@@ -401,10 +398,6 @@ func (s *Service) BootstrapAdmin(username, password string) (map[string]any, int
 
 func (s *Service) GetStatus() map[string]any {
 	s.detectController(false)
-	providers := s.GetProviders()
-	groups := s.GetGroups()
-	transitRoutes := s.GetTransitRoutes()
-	listeners := s.GetListeners()
 	return map[string]any{
 		"app": map[string]any{
 			"name":       "AXIS",
@@ -415,12 +408,12 @@ func (s *Service) GetStatus() map[string]any {
 		"runtime":    s.state.Runtime,
 		"controller": s.state.Controller,
 		"counts": map[string]int{
-			"providers":     len(providers),
-			"groups":        len(groups),
-			"transitRoutes": len(transitRoutes),
-			"listeners":     len(listeners),
-			"nodes":         sumProviderNodes(providers),
+			"nodeSources":  len(s.config.NodeSources),
+			"routes":       len(s.config.Routes),
+			"publications": len(s.config.Publications),
+			"nodes":        len(s.config.NodeSources),
 		},
+		"usage":        s.GetUsage(),
 		"warnings":     s.buildWarnings(),
 		"recentEvents": s.state.Events[:minInt(len(s.state.Events), 12)],
 	}

@@ -251,17 +251,21 @@ func BuildOpenAPISpec() map[string]any {
 		"Config": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"server":          schemaRef("ServerConfig"),
-				"admin":           schemaRef("AdminConfig"),
-				"runtime":         schemaRef("RuntimeConfig"),
-				"subscriptions":   map[string]any{"type": "array", "items": schemaRef("Subscription")},
-				"landing_proxies": map[string]any{"type": "array", "items": schemaRef("LandingProxy")},
-				"egress_groups":   map[string]any{"type": "array", "items": schemaRef("EgressGroup")},
-				"transit_routes":  map[string]any{"type": "array", "items": schemaRef("TransitRoute")},
-				"listeners":       map[string]any{"type": "array", "items": schemaRef("Listener")},
+				"server":       schemaRef("ServerConfig"),
+				"admin":        schemaRef("AdminConfig"),
+				"runtime":      schemaRef("RuntimeConfig"),
+				"node_sources": map[string]any{"type": "array", "items": schemaRef("NodeSource")},
+				"routes":       map[string]any{"type": "array", "items": schemaRef("RouteConfig")},
+				"usage":        schemaRef("UsageConfig"),
+				"publications": map[string]any{"type": "array", "items": schemaRef("PublicationConfig")},
 			},
-			"required": []string{"server", "admin", "runtime", "subscriptions", "landing_proxies", "egress_groups", "listeners"},
+			"required": []string{"server", "admin", "runtime", "node_sources", "routes", "usage", "publications"},
 		},
+		"NodeSource": map[string]any{"type": "object", "additionalProperties": true},
+		"RouteConfig": map[string]any{"type": "object", "additionalProperties": true},
+		"UsageConfig": map[string]any{"type": "object", "additionalProperties": true},
+		"UsageView": map[string]any{"type": "object", "additionalProperties": true},
+		"PublicationConfig": map[string]any{"type": "object", "additionalProperties": true},
 		"ConfigEnvelope": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -500,6 +504,9 @@ func BuildOpenAPISpec() map[string]any {
 		"StatusCounts": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"nodeSources":  map[string]any{"type": "integer"},
+				"routes":       map[string]any{"type": "integer"},
+				"publications": map[string]any{"type": "integer"},
 				"providers":     map[string]any{"type": "integer"},
 				"groups":        map[string]any{"type": "integer"},
 				"transitRoutes": map[string]any{"type": "integer"},
@@ -727,6 +734,10 @@ func BuildOpenAPISpec() map[string]any {
 				"required":             map[string]any{"type": "boolean"},
 				"needsPasswordReset":   map[string]any{"type": "boolean"},
 				"adminUsername":        map[string]any{"type": "string"},
+				"hasNodeSources":       map[string]any{"type": "boolean"},
+				"hasRoutes":            map[string]any{"type": "boolean"},
+				"hasUsage":             map[string]any{"type": "boolean"},
+				"hasPublications":      map[string]any{"type": "boolean"},
 				"hasSubscriptions":     map[string]any{"type": "boolean"},
 				"hasRealSubscriptions": map[string]any{"type": "boolean"},
 				"hasEgressGroups":      map[string]any{"type": "boolean"},
@@ -1171,6 +1182,71 @@ func BuildOpenAPISpec() map[string]any {
 					"401": jsonResponse("未登录", schemaRef("ErrorResponse")),
 					"500": jsonResponse("服务端错误", schemaRef("ErrorResponse")),
 				},
+			},
+		},
+			"/api/node-sources": map[string]any{
+			"get": map[string]any{
+				"summary":   "节点来源列表",
+				"responses": map[string]any{"200": jsonResponse("节点来源", map[string]any{"type": "array", "items": schemaRef("NodeSource")}), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},
+			},
+			"post": map[string]any{
+				"summary":     "添加节点来源",
+				"requestBody": jsonBody(schemaRef("NodeSource")),
+				"responses":   mutationErrorResponsesWith200("保存结果", "SaveConfigResponse"),
+				},
+			},
+			"/api/node-sources/{name}/check": map[string]any{
+				"get": map[string]any{
+					"summary": "检查本机节点",
+					"parameters": []map[string]any{pathParam("name", "节点来源名称")},
+					"responses": map[string]any{"200": jsonResponse("检查结果", map[string]any{"type": "object", "additionalProperties": true}), "401": jsonResponse("未登录", schemaRef("ErrorResponse")), "404": jsonResponse("不存在", schemaRef("ErrorResponse"))},
+				},
+			},
+			"/api/node-sources/{name}/connection": map[string]any{
+				"get": map[string]any{
+					"summary": "读取本机节点连接信息",
+					"parameters": []map[string]any{pathParam("name", "节点来源名称")},
+					"responses": map[string]any{"200": jsonResponse("连接信息", map[string]any{"type": "object", "additionalProperties": true}), "400": jsonResponse("请求参数错误", schemaRef("ErrorResponse")), "401": jsonResponse("未登录", schemaRef("ErrorResponse")), "404": jsonResponse("不存在", schemaRef("ErrorResponse"))},
+				},
+			},
+			"/api/node-sources/{name}/baota-config": map[string]any{
+				"get": map[string]any{
+					"summary": "生成宝塔兼容配置",
+					"parameters": []map[string]any{pathParam("name", "节点来源名称")},
+					"responses": map[string]any{"200": jsonResponse("宝塔配置", map[string]any{"type": "object", "additionalProperties": true}), "401": jsonResponse("未登录", schemaRef("ErrorResponse")), "404": jsonResponse("不存在", schemaRef("ErrorResponse"))},
+				},
+			},
+			"/api/routes": map[string]any{
+			"get": map[string]any{
+				"summary":   "线路列表",
+				"responses": map[string]any{"200": jsonResponse("线路", map[string]any{"type": "array", "items": schemaRef("RouteConfig")}), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},
+			},
+			"post": map[string]any{
+				"summary":     "创建线路",
+				"requestBody": jsonBody(schemaRef("RouteConfig")),
+				"responses":   mutationErrorResponsesWith200("保存结果", "SaveConfigResponse"),
+			},
+		},
+		"/api/usage": map[string]any{
+			"get": map[string]any{
+				"summary":   "读取本机使用状态",
+				"responses": map[string]any{"200": jsonResponse("使用状态", schemaRef("UsageView")), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},
+			},
+			"put": map[string]any{
+				"summary":     "保存本机使用设置",
+				"requestBody": jsonBody(schemaRef("UsageConfig")),
+				"responses":   mutationErrorResponsesWith200("保存结果", "SaveConfigResponse"),
+			},
+		},
+		"/api/publications": map[string]any{
+			"get": map[string]any{
+				"summary":   "发布列表",
+				"responses": map[string]any{"200": jsonResponse("发布", map[string]any{"type": "array", "items": schemaRef("PublicationConfig")}), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},
+			},
+			"post": map[string]any{
+				"summary":     "创建发布",
+				"requestBody": jsonBody(schemaRef("PublicationConfig")),
+				"responses":   mutationErrorResponsesWith200("保存结果", "SaveConfigResponse"),
 			},
 		},
 		"/api/providers": map[string]any{

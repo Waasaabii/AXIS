@@ -27,7 +27,8 @@
     "preview:ui": "pnpm --filter @axis/frontend preview",
     "reset:setup": "node scripts/reset-setup.mjs",
     "start": "node scripts/go-run.mjs run ./cmd/axis serve",
-    "test": "node scripts/go-run.mjs test ./..."
+    "test": "node scripts/go-run.mjs test ./...",
+    "package:release": "node scripts/package-release.mjs"
   },
   "dependencies": {
     "yaml": "^2.8.2"

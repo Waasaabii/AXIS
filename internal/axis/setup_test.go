@@ -2,66 +2,28 @@ package axis
 
 import "testing"
 
-func TestBuildSetupStateRequiresSetupForPlaceholderSubscription(t *testing.T) {
-	config := &Config{
-		Admin: AdminConfig{
-			Username:              "admin",
-			RequiresPasswordReset: false,
-		},
-		Subscriptions: []Subscription{
-			{Name: "sample", URL: "https://example.com/your-subscription-url"},
-		},
-		EgressGroups: []EgressGroup{
-			{Name: "egress-hk", Provider: "sample"},
-		},
-		Listeners: []Listener{
-			{Name: "listener-hk", Port: 1080, EgressGroup: "egress-hk"},
-		},
-	}
-
+func TestBuildSetupStateRequiresSetupWithoutNodeSource(t *testing.T) {
+	config := &Config{Admin: AdminConfig{Username: "admin", RequiresPasswordReset: false}}
 	state := BuildSetupState(config)
-	if !state.Required {
-		t.Fatal("占位订阅时应要求进入 setup")
-	}
-	if state.HasRealSubscriptions {
-		t.Fatal("占位订阅不应被视为真实订阅")
+	if !state.Required || state.HasNodeSources {
+		t.Fatalf("缺少节点来源时应要求初始化: %#v", state)
 	}
 }
 
 func TestBuildSetupStateReadyWhenCoreDataExists(t *testing.T) {
-	config := &Config{
-		Admin: AdminConfig{
-			Username:              "admin",
-			RequiresPasswordReset: false,
-		},
-		Subscriptions: []Subscription{
-			{Name: "airport-main", URL: "https://sub.example.net/real"},
-		},
-		EgressGroups: []EgressGroup{
-			{Name: "egress-hk", Provider: "airport-main"},
-		},
-		Listeners: []Listener{
-			{Name: "listener-hk", Port: 1080, EgressGroup: "egress-hk"},
-		},
-	}
-
+	config := newValidProductConfig()
+	config.Admin.RequiresPasswordReset = false
 	state := BuildSetupState(config)
 	if state.Required {
-		t.Fatal("完整核心数据时不应要求 setup")
+		t.Fatalf("完整核心数据时不应要求 setup: %#v", state)
 	}
-	if !state.HasRealSubscriptions || !state.HasEgressGroups || !state.HasListeners {
+	if !state.HasNodeSources || !state.HasRoutes || !state.HasUsage {
 		t.Fatal("完整核心数据应全部就绪")
 	}
 }
 
 func TestBuildSetupStateIncludesAdminUsername(t *testing.T) {
-	config := &Config{
-		Admin: AdminConfig{
-			Username:              "axis-admin",
-			RequiresPasswordReset: true,
-		},
-	}
-
+	config := &Config{Admin: AdminConfig{Username: "axis-admin", RequiresPasswordReset: true}}
 	state := BuildSetupState(config)
 	if state.AdminUsername != "axis-admin" {
 		t.Fatalf("expected admin username to be exposed, got %q", state.AdminUsername)

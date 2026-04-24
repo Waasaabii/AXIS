@@ -315,7 +315,7 @@ func buildLandingProxy(landing LandingProxy) map[string]any {
 }
 
 func buildRenderedListener(listener Listener, proxyName string) map[string]any {
-	return map[string]any{
+	rendered := map[string]any{
 		"name":   listener.Name,
 		"type":   firstNonEmpty(listener.Type, "socks"),
 		"listen": firstNonEmpty(listener.Listen, "0.0.0.0"),
@@ -324,6 +324,16 @@ func buildRenderedListener(listener Listener, proxyName string) map[string]any {
 		"users":  listener.Users,
 		"proxy":  proxyName,
 	}
+	if listener.Certificate != "" {
+		rendered["certificate"] = listener.Certificate
+	}
+	if listener.PrivateKey != "" {
+		rendered["private-key"] = listener.PrivateKey
+	}
+	if listener.SNI != "" {
+		rendered["sni"] = listener.SNI
+	}
+	return rendered
 }
 
 func RenderMihomoConfig(config *Config) (string, error) {

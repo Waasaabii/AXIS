@@ -35,9 +35,17 @@ async function fileExists(targetPath) {
 
 async function readSourceConfig(configPath) {
   if (await fileExists(configPath)) {
-    return YAML.parse(await readFile(configPath, "utf8")) || {};
+    const existing = YAML.parse(await readFile(configPath, "utf8")) || {};
+    if (!hasLegacyConfigKeys(existing)) {
+      return existing;
+    }
+    console.warn("[desktop-dev] 检测到旧版开发配置，已使用新配置模板重建。");
   }
   return readRepoConfigTemplate();
+}
+
+function hasLegacyConfigKeys(config) {
+  return ["subscriptions", "landing_proxies", "egress_groups", "transit_routes", "listeners"].some((key) => Object.prototype.hasOwnProperty.call(config, key));
 }
 
 export function resolveDevProfile() {
@@ -93,4 +101,3 @@ export async function writeDevConfig({ renderOnlyMode } = {}) {
     managedMode,
   };
 }
-

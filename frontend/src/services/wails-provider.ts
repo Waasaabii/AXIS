@@ -44,6 +44,7 @@ import type {
   UpdateTransitRouteRequest,
 } from "./provider-types"
 import { ApiError } from "./provider-types"
+import type { BaotaConfigResponse, LocalNodeCheckResponse, LocalNodeConnectionResponse, NodeSource, PublicationConfig, RouteConfig, UsageView } from "./product-types"
 
 type WailsBindingMethod = (...args: unknown[]) => Promise<unknown>
 type WailsBindingGroup = Record<string, WailsBindingMethod>
@@ -90,6 +91,23 @@ export const wailsAPI: AxisAPI = {
   getStatus: () => callBinding<StatusResponse>("EngineBindings", "GetStatus"),
   getConfig: () => callBinding<ConfigEnvelope>("EngineBindings", "GetConfig"),
   saveConfig: (body: SaveConfigRequest) => callBinding<SaveConfigResponse>("EngineBindings", "SaveConfig", body),
+  getNodeSources: () => callBinding<NodeSource[]>("EngineBindings", "GetNodeSources"),
+  addNodeSource: (body: Partial<NodeSource>) => callBinding<SaveConfigResponse>("EngineBindings", "AddNodeSource", body),
+  updateNodeSource: (name: string, body: Partial<NodeSource>) => callBinding<SaveConfigResponse>("EngineBindings", "UpdateNodeSource", name, body),
+  deleteNodeSource: (name: string) => callBinding<SaveConfigResponse>("EngineBindings", "DeleteNodeSource", name),
+  checkLocalNode: (name: string) => callBinding<LocalNodeCheckResponse>("EngineBindings", "CheckLocalNode", name),
+  getLocalNodeConnection: (name: string) => callBinding<LocalNodeConnectionResponse>("EngineBindings", "GetLocalNodeConnection", name),
+  getLocalNodeBaotaConfig: (name: string) => callBinding<BaotaConfigResponse>("EngineBindings", "GetLocalNodeBaotaConfig", name),
+  getRoutes: () => callBinding<RouteConfig[]>("EngineBindings", "GetRoutes"),
+  addRoute: (body: Partial<RouteConfig>) => callBinding<SaveConfigResponse>("EngineBindings", "AddRoute", body),
+  updateRoute: (name: string, body: Partial<RouteConfig>) => callBinding<SaveConfigResponse>("EngineBindings", "UpdateRoute", name, body),
+  deleteRoute: (name: string) => callBinding<SaveConfigResponse>("EngineBindings", "DeleteRoute", name),
+  getUsage: () => callBinding<UsageView>("EngineBindings", "GetUsage"),
+  updateUsage: (body: Partial<UsageView>) => callBinding<SaveConfigResponse>("EngineBindings", "UpdateUsage", body),
+  getPublications: () => callBinding<PublicationConfig[]>("EngineBindings", "GetPublications"),
+  addPublication: (body: Partial<PublicationConfig>) => callBinding<SaveConfigResponse>("EngineBindings", "AddPublication", body),
+  updatePublication: (name: string, body: Partial<PublicationConfig>) => callBinding<SaveConfigResponse>("EngineBindings", "UpdatePublication", name, body),
+  deletePublication: (name: string) => callBinding<SaveConfigResponse>("EngineBindings", "DeletePublication", name),
   getProviders: () => callBinding<ProviderListItem[]>("EngineBindings", "GetProviders"),
   refreshProvider: (name: string) => callBinding<ProviderRefreshResponse>("EngineBindings", "RefreshProvider", name),
   getGroups: () => callBinding<GroupView[]>("EngineBindings", "GetGroups"),

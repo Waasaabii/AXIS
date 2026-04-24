@@ -22,10 +22,9 @@ func BuildDefaultConfig(configPath string) *Config {
 			ExternalSecret:     "",
 			RenderOnly:         true,
 		},
-		Subscriptions:  []Subscription{},
-		LandingProxies: []LandingProxy{},
-		EgressGroups:   []EgressGroup{},
-		TransitRoutes:  []TransitRoute{},
-		Listeners:      []Listener{},
+		NodeSources:  []NodeSource{},
+		Routes:       []RouteConfig{},
+		Usage:        UsageConfig{LocalProxy: LocalProxyUsage{Type: "mixed", Listen: "127.0.0.1", Port: 7890}, VirtualInterface: VirtualInterfaceUsage{Mode: "system"}},
+		Publications: []PublicationConfig{},
 	}
 }

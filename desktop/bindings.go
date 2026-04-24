@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Waasaabii/AXIS/internal/axis"
@@ -199,6 +200,194 @@ func (e *EngineBindings) SaveConfig(payload map[string]any) (map[string]any, err
 		return nil, err
 	}
 	result, status := service.SaveConfigFromAPI(config)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) GetNodeSources() ([]axis.NodeSource, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.GetNodeSources(), nil
+}
+
+func (e *EngineBindings) AddNodeSource(payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.AddNodeSource(payload)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) UpdateNodeSource(name string, payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.UpdateNodeSource(name, payload)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) DeleteNodeSource(name string) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.RemoveNodeSource(name)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) CheckLocalNode(name string) (axis.LocalNodeCheckResponse, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.LocalNodeCheckResponse{}, err
+	}
+	result, status := service.CheckLocalNode(name)
+	if err := bindingError(map[string]any{"ok": result.OK, "error": result.Message}, status); err != nil {
+		return axis.LocalNodeCheckResponse{}, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) GetLocalNodeConnection(name string) (axis.LocalNodeConnectionResponse, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.LocalNodeConnectionResponse{}, err
+	}
+	result, status := service.GetLocalNodeConnection(name)
+	if err := bindingError(map[string]any{"ok": result.OK, "error": strings.Join(result.Warnings, "；")}, status); err != nil {
+		return axis.LocalNodeConnectionResponse{}, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) GetLocalNodeBaotaConfig(name string) (axis.BaotaConfigResponse, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.BaotaConfigResponse{}, err
+	}
+	result, status := service.GetLocalNodeBaotaConfig(name)
+	if err := bindingError(map[string]any{"ok": result.OK, "error": strings.Join(result.Warnings, "；")}, status); err != nil {
+		return axis.BaotaConfigResponse{}, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) GetRoutes() ([]axis.RouteConfig, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.GetRoutes(), nil
+}
+
+func (e *EngineBindings) AddRoute(payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.AddRoute(payload)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) UpdateRoute(name string, payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.UpdateRoute(name, payload)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) DeleteRoute(name string) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.RemoveRoute(name)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) GetUsage() (axis.UsageView, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.UsageView{}, err
+	}
+	return service.GetUsage(), nil
+}
+
+func (e *EngineBindings) UpdateUsage(payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.UpdateUsage(payload)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) GetPublications() ([]axis.PublicationConfig, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	return service.GetPublications(), nil
+}
+
+func (e *EngineBindings) AddPublication(payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.AddPublication(payload)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) UpdatePublication(name string, payload map[string]any) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.UpdatePublication(name, payload)
+	if err := bindingError(result, status); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) DeletePublication(name string) (map[string]any, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return nil, err
+	}
+	result, status := service.RemovePublication(name)
 	if err := bindingError(result, status); err != nil {
 		return nil, err
 	}

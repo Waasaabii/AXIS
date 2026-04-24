@@ -279,21 +279,21 @@
           "admin": {
             "$ref": "#/components/schemas/AdminConfig"
           },
-          "egress_groups": {
+          "node_sources": {
             "items": {
-              "$ref": "#/components/schemas/EgressGroup"
+              "$ref": "#/components/schemas/NodeSource"
             },
             "type": "array"
           },
-          "landing_proxies": {
+          "publications": {
             "items": {
-              "$ref": "#/components/schemas/LandingProxy"
+              "$ref": "#/components/schemas/PublicationConfig"
             },
             "type": "array"
           },
-          "listeners": {
+          "routes": {
             "items": {
-              "$ref": "#/components/schemas/Listener"
+              "$ref": "#/components/schemas/RouteConfig"
             },
             "type": "array"
           },
@@ -303,27 +303,18 @@
           "server": {
             "$ref": "#/components/schemas/ServerConfig"
           },
-          "subscriptions": {
-            "items": {
-              "$ref": "#/components/schemas/Subscription"
-            },
-            "type": "array"
-          },
-          "transit_routes": {
-            "items": {
-              "$ref": "#/components/schemas/TransitRoute"
-            },
-            "type": "array"
+          "usage": {
+            "$ref": "#/components/schemas/UsageConfig"
           }
         },
         "required": [
           "server",
           "admin",
           "runtime",
-          "subscriptions",
-          "landing_proxies",
-          "egress_groups",
-          "listeners"
+          "node_sources",
+          "routes",
+          "usage",
+          "publications"
         ],
         "type": "object"
       },
@@ -1308,6 +1299,10 @@
         ],
         "type": "object"
       },
+      "NodeSource": {
+        "additionalProperties": true,
+        "type": "object"
+      },
       "ProbeControllerResponse": {
         "properties": {
           "controller": {
@@ -1434,6 +1429,10 @@
         ],
         "type": "object"
       },
+      "PublicationConfig": {
+        "additionalProperties": true,
+        "type": "object"
+      },
       "ReloadResponse": {
         "properties": {
           "message": {
@@ -1474,6 +1473,10 @@
           "updatedAt",
           "content"
         ],
+        "type": "object"
+      },
+      "RouteConfig": {
+        "additionalProperties": true,
         "type": "object"
       },
       "RuntimeApplyResult": {
@@ -1853,10 +1856,22 @@
           "hasListeners": {
             "type": "boolean"
           },
+          "hasNodeSources": {
+            "type": "boolean"
+          },
+          "hasPublications": {
+            "type": "boolean"
+          },
           "hasRealSubscriptions": {
             "type": "boolean"
           },
+          "hasRoutes": {
+            "type": "boolean"
+          },
           "hasSubscriptions": {
+            "type": "boolean"
+          },
+          "hasUsage": {
             "type": "boolean"
           },
           "needsPasswordReset": {
@@ -1927,10 +1942,19 @@
           "listeners": {
             "type": "integer"
           },
+          "nodeSources": {
+            "type": "integer"
+          },
           "nodes": {
             "type": "integer"
           },
           "providers": {
+            "type": "integer"
+          },
+          "publications": {
+            "type": "integer"
+          },
+          "routes": {
             "type": "integer"
           },
           "transitRoutes": {
@@ -2403,6 +2427,14 @@
           "updateAvailable",
           "canAutoApply"
         ],
+        "type": "object"
+      },
+      "UsageConfig": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "UsageView": {
+        "additionalProperties": true,
         "type": "object"
       },
       "UserIdentity": {
@@ -3859,6 +3891,258 @@
         "summary": "安装 Mihomo 版本"
       }
     },
+    "/api/node-sources": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NodeSource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "节点来源"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "节点来源列表"
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NodeSource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "添加节点来源"
+      }
+    },
+    "/api/node-sources/{name}/baota-config": {
+      "get": {
+        "parameters": [
+          {
+            "description": "节点来源名称",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "宝塔配置"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "不存在"
+          }
+        },
+        "summary": "生成宝塔兼容配置"
+      }
+    },
+    "/api/node-sources/{name}/check": {
+      "get": {
+        "parameters": [
+          {
+            "description": "节点来源名称",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "检查结果"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "不存在"
+          }
+        },
+        "summary": "检查本机节点"
+      }
+    },
+    "/api/node-sources/{name}/connection": {
+      "get": {
+        "parameters": [
+          {
+            "description": "节点来源名称",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "连接信息"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "不存在"
+          }
+        },
+        "summary": "读取本机节点连接信息"
+      }
+    },
     "/api/openapi.json": {
       "get": {
         "responses": {
@@ -4062,6 +4346,101 @@
         "summary": "获取下一个可用代理"
       }
     },
+    "/api/publications": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PublicationConfig"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "发布"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "发布列表"
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicationConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "创建发布"
+      }
+    },
     "/api/reload": {
       "post": {
         "responses": {
@@ -4124,6 +4503,101 @@
           }
         },
         "summary": "查看当前生成的代理核心配置"
+      }
+    },
+    "/api/routes": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RouteConfig"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "线路"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "线路列表"
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "创建线路"
       }
     },
     "/api/runtime-preflight": {
@@ -4897,7 +5371,7 @@
             "description": "中转线路不存在"
           }
         },
-        "summary": "执行中转线路健康检查"
+        "summary": "执行中转线��健康检查"
       }
     },
     "/api/transit-routes/{name}/update": {
@@ -4976,6 +5450,98 @@
           }
         },
         "summary": "更新中转线路"
+      }
+    },
+    "/api/usage": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageView"
+                }
+              }
+            },
+            "description": "使用状态"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录"
+          }
+        },
+        "summary": "读取本机使用状态"
+      },
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsageConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConfigResponse"
+                }
+              }
+            },
+            "description": "保存结果"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "请求参数错误"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "未登录或会话已过期"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "目标不存在"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "服务端错误"
+          }
+        },
+        "summary": "保存本机使用设置"
       }
     }
   }

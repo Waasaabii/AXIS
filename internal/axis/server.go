@@ -160,6 +160,54 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case pathname == "/api/status" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetStatus())
 			return
+		case pathname == "/api/node-sources" && method == http.MethodGet:
+			writeJSON(w, 200, s.service.GetNodeSources())
+			return
+		case pathname == "/api/node-sources" && method == http.MethodPost:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.AddNodeSource(payload)
+			writeJSON(w, status, response)
+			return
+		case pathname == "/api/routes" && method == http.MethodGet:
+			writeJSON(w, 200, s.service.GetRoutes())
+			return
+		case pathname == "/api/routes" && method == http.MethodPost:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.AddRoute(payload)
+			writeJSON(w, status, response)
+			return
+		case pathname == "/api/usage" && method == http.MethodGet:
+			writeJSON(w, 200, s.service.GetUsage())
+			return
+		case pathname == "/api/usage" && method == http.MethodPut:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.UpdateUsage(payload)
+			writeJSON(w, status, response)
+			return
+		case pathname == "/api/publications" && method == http.MethodGet:
+			writeJSON(w, 200, s.service.GetPublications())
+			return
+		case pathname == "/api/publications" && method == http.MethodPost:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.AddPublication(payload)
+			writeJSON(w, status, response)
+			return
 		case pathname == "/api/host/status" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetHostStatus())
 			return
@@ -325,6 +373,75 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(pathname, "/api/providers/") && strings.HasSuffix(pathname, "/refresh") && method == http.MethodPost {
 			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/providers/"), "/refresh")
 			writeJSON(w, 200, s.service.RefreshProvider(name))
+			return
+		}
+			if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/update") && method == http.MethodPut {
+				name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/update")
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.UpdateNodeSource(name, payload)
+				writeJSON(w, status, response)
+				return
+			}
+			if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/check") && method == http.MethodGet {
+				name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/check")
+				response, status := s.service.CheckLocalNode(name)
+				writeJSON(w, status, response)
+				return
+			}
+			if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/connection") && method == http.MethodGet {
+				name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/connection")
+				response, status := s.service.GetLocalNodeConnection(name)
+				writeJSON(w, status, response)
+				return
+			}
+			if strings.HasPrefix(pathname, "/api/node-sources/") && strings.HasSuffix(pathname, "/baota-config") && method == http.MethodGet {
+				name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/node-sources/"), "/baota-config")
+				response, status := s.service.GetLocalNodeBaotaConfig(name)
+				writeJSON(w, status, response)
+				return
+			}
+			if strings.HasPrefix(pathname, "/api/node-sources/") && method == http.MethodDelete {
+				name := strings.TrimPrefix(pathname, "/api/node-sources/")
+			response, status := s.service.RemoveNodeSource(name)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/routes/") && strings.HasSuffix(pathname, "/update") && method == http.MethodPut {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/routes/"), "/update")
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.UpdateRoute(name, payload)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/routes/") && method == http.MethodDelete {
+			name := strings.TrimPrefix(pathname, "/api/routes/")
+			response, status := s.service.RemoveRoute(name)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/publications/") && strings.HasSuffix(pathname, "/update") && method == http.MethodPut {
+			name := strings.TrimSuffix(strings.TrimPrefix(pathname, "/api/publications/"), "/update")
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			response, status := s.service.UpdatePublication(name, payload)
+			writeJSON(w, status, response)
+			return
+		}
+		if strings.HasPrefix(pathname, "/api/publications/") && method == http.MethodDelete {
+			name := strings.TrimPrefix(pathname, "/api/publications/")
+			response, status := s.service.RemovePublication(name)
+			writeJSON(w, status, response)
 			return
 		}
 		if strings.HasPrefix(pathname, "/api/groups/") && strings.HasSuffix(pathname, "/select") && method == http.MethodPost {

@@ -45,6 +45,7 @@ import type {
 } from "./provider-types"
 import { ApiError } from "./provider-types"
 import { apiKeys, apiPath } from "./api-keys"
+import type { BaotaConfigResponse, LocalNodeCheckResponse, LocalNodeConnectionResponse, NodeSource, PublicationConfig, RouteConfig, UsageView } from "./product-types"
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -89,6 +90,23 @@ export const httpAPI: AxisAPI = {
   getStatus: () => requestJson<StatusResponse>(apiKeys.status),
   getConfig: () => requestJson<ConfigEnvelope>(apiKeys.config),
   saveConfig: (body: SaveConfigRequest) => requestJson<SaveConfigResponse>(apiKeys.config, { method: "PUT", body: JSON.stringify(body) }),
+  getNodeSources: () => requestJson<NodeSource[]>(apiKeys.nodeSources),
+  addNodeSource: (body: Partial<NodeSource>) => requestJson<SaveConfigResponse>(apiKeys.nodeSources, { method: "POST", body: JSON.stringify(body) }),
+  updateNodeSource: (name: string, body: Partial<NodeSource>) => requestJson<SaveConfigResponse>(apiPath.nodeSourceUpdate(name), { method: "PUT", body: JSON.stringify(body) }),
+  deleteNodeSource: (name: string) => requestJson<SaveConfigResponse>(apiPath.nodeSource(name), { method: "DELETE" }),
+  checkLocalNode: (name: string) => requestJson<LocalNodeCheckResponse>(apiPath.nodeSourceCheck(name)),
+  getLocalNodeConnection: (name: string) => requestJson<LocalNodeConnectionResponse>(apiPath.nodeSourceConnection(name)),
+  getLocalNodeBaotaConfig: (name: string) => requestJson<BaotaConfigResponse>(apiPath.nodeSourceBaotaConfig(name)),
+  getRoutes: () => requestJson<RouteConfig[]>(apiKeys.routes),
+  addRoute: (body: Partial<RouteConfig>) => requestJson<SaveConfigResponse>(apiKeys.routes, { method: "POST", body: JSON.stringify(body) }),
+  updateRoute: (name: string, body: Partial<RouteConfig>) => requestJson<SaveConfigResponse>(apiPath.routeUpdate(name), { method: "PUT", body: JSON.stringify(body) }),
+  deleteRoute: (name: string) => requestJson<SaveConfigResponse>(apiPath.route(name), { method: "DELETE" }),
+  getUsage: () => requestJson<UsageView>(apiKeys.usage),
+  updateUsage: (body: Partial<UsageView>) => requestJson<SaveConfigResponse>(apiKeys.usage, { method: "PUT", body: JSON.stringify(body) }),
+  getPublications: () => requestJson<PublicationConfig[]>(apiKeys.publications),
+  addPublication: (body: Partial<PublicationConfig>) => requestJson<SaveConfigResponse>(apiKeys.publications, { method: "POST", body: JSON.stringify(body) }),
+  updatePublication: (name: string, body: Partial<PublicationConfig>) => requestJson<SaveConfigResponse>(apiPath.publicationUpdate(name), { method: "PUT", body: JSON.stringify(body) }),
+  deletePublication: (name: string) => requestJson<SaveConfigResponse>(apiPath.publication(name), { method: "DELETE" }),
   getProviders: () => requestJson<ProviderListItem[]>(apiKeys.providers),
   refreshProvider: (name: string) => requestJson<ProviderRefreshResponse>(apiPath.providerRefresh(name), { method: "POST" }),
   getGroups: () => requestJson<GroupView[]>(apiKeys.groups),

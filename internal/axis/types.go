@@ -88,20 +88,143 @@ type Listener struct {
 	UDP          bool           `json:"udp" yaml:"udp"`
 	Enabled      bool           `json:"enabled" yaml:"enabled"`
 	Users        []ListenerUser `json:"users" yaml:"users"`
+	Certificate  string         `json:"certificate,omitempty" yaml:"certificate,omitempty"`
+	PrivateKey   string         `json:"private_key,omitempty" yaml:"private_key,omitempty"`
+	SNI          string         `json:"sni,omitempty" yaml:"sni,omitempty"`
 	RouteMode    string         `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
 	EgressGroup  string         `json:"egress_group,omitempty" yaml:"egress_group,omitempty"`
 	TransitRoute string         `json:"transit_route,omitempty" yaml:"transit_route,omitempty"`
 }
 
+type NodeSourceSubscription struct {
+	URL                 string            `json:"url,omitempty" yaml:"url,omitempty"`
+	Interval            int               `json:"interval,omitempty" yaml:"interval,omitempty"`
+	HealthCheckURL      string            `json:"health_check_url,omitempty" yaml:"health_check_url,omitempty"`
+	HealthCheckInterval int               `json:"health_check_interval,omitempty" yaml:"health_check_interval,omitempty"`
+	Headers             map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Via                 string            `json:"via,omitempty" yaml:"via,omitempty"`
+}
+
+type NodeSourceEndpoint struct {
+	Server         string `json:"server,omitempty" yaml:"server,omitempty"`
+	Port           int    `json:"port,omitempty" yaml:"port,omitempty"`
+	Username       string `json:"username,omitempty" yaml:"username,omitempty"`
+	Password       string `json:"password,omitempty" yaml:"password,omitempty"`
+	TLS            bool   `json:"tls,omitempty" yaml:"tls,omitempty"`
+	SNI            string `json:"sni,omitempty" yaml:"sni,omitempty"`
+	SkipCertVerify bool   `json:"skip_cert_verify,omitempty" yaml:"skip_cert_verify,omitempty"`
+}
+
+type AxisConnectionConfig struct {
+	URL      string `json:"url,omitempty" yaml:"url,omitempty"`
+	Username string `json:"username,omitempty" yaml:"username,omitempty"`
+	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+	Token    string `json:"token,omitempty" yaml:"token,omitempty"`
+}
+
+type LocalNodeConfig struct {
+	AccessMode     string         `json:"access_mode,omitempty" yaml:"access_mode,omitempty"`
+	Listen         string         `json:"listen,omitempty" yaml:"listen,omitempty"`
+	Port           int            `json:"port,omitempty" yaml:"port,omitempty"`
+	ExternalHost   string         `json:"external_host,omitempty" yaml:"external_host,omitempty"`
+	ExternalPort   int            `json:"external_port,omitempty" yaml:"external_port,omitempty"`
+	Users          []ListenerUser `json:"users,omitempty" yaml:"users,omitempty"`
+	Route          string         `json:"route,omitempty" yaml:"route,omitempty"`
+	Certificate    string         `json:"certificate,omitempty" yaml:"certificate,omitempty"`
+	PrivateKey     string         `json:"private_key,omitempty" yaml:"private_key,omitempty"`
+	TLS            bool           `json:"tls,omitempty" yaml:"tls,omitempty"`
+	SNI            string         `json:"sni,omitempty" yaml:"sni,omitempty"`
+	SkipCertVerify bool           `json:"skip_cert_verify,omitempty" yaml:"skip_cert_verify,omitempty"`
+}
+
+type NodeSource struct {
+	Name         string                 `json:"name" yaml:"name"`
+	Type         string                 `json:"type" yaml:"type"`
+	Enabled      bool                   `json:"enabled" yaml:"enabled"`
+	Protocol     string                 `json:"protocol,omitempty" yaml:"protocol,omitempty"`
+	Subscription NodeSourceSubscription `json:"subscription,omitempty" yaml:"subscription,omitempty"`
+	Endpoint     NodeSourceEndpoint     `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
+	Axis         AxisConnectionConfig   `json:"axis,omitempty" yaml:"axis,omitempty"`
+	LocalNode    LocalNodeConfig        `json:"local_node,omitempty" yaml:"local_node,omitempty"`
+	Notes        string                 `json:"notes,omitempty" yaml:"notes,omitempty"`
+}
+
+type RouteEndpointRef struct {
+	Source string `json:"source,omitempty" yaml:"source,omitempty"`
+	Node   string `json:"node,omitempty" yaml:"node,omitempty"`
+}
+
+type RouteHealthCheck struct {
+	URL      string `json:"url,omitempty" yaml:"url,omitempty"`
+	Interval int    `json:"interval,omitempty" yaml:"interval,omitempty"`
+}
+
+type RouteConfig struct {
+	Name        string           `json:"name" yaml:"name"`
+	Enabled     bool             `json:"enabled" yaml:"enabled"`
+	Entry       RouteEndpointRef `json:"entry,omitempty" yaml:"entry,omitempty"`
+	Strategy    string           `json:"strategy,omitempty" yaml:"strategy,omitempty"`
+	Landing     RouteEndpointRef `json:"landing,omitempty" yaml:"landing,omitempty"`
+	HealthCheck RouteHealthCheck `json:"health_check,omitempty" yaml:"health_check,omitempty"`
+	Notes       string           `json:"notes,omitempty" yaml:"notes,omitempty"`
+}
+
+type LocalProxyUsage struct {
+	Enabled bool           `json:"enabled" yaml:"enabled"`
+	Type    string         `json:"type" yaml:"type"`
+	Listen  string         `json:"listen" yaml:"listen"`
+	Port    int            `json:"port" yaml:"port"`
+	Users   []ListenerUser `json:"users,omitempty" yaml:"users,omitempty"`
+}
+
+type VirtualInterfaceUsage struct {
+	Enabled bool   `json:"enabled" yaml:"enabled"`
+	Mode    string `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Status  string `json:"status,omitempty" yaml:"status,omitempty"`
+	Message string `json:"message,omitempty" yaml:"message,omitempty"`
+}
+
+type UsageConfig struct {
+	SelectedRoute    string                `json:"selectedRoute,omitempty" yaml:"selected_route,omitempty"`
+	LocalProxy       LocalProxyUsage       `json:"localProxy" yaml:"local_proxy"`
+	VirtualInterface VirtualInterfaceUsage `json:"virtualInterface" yaml:"virtual_interface"`
+	LastAppliedAt    string                `json:"lastAppliedAt,omitempty" yaml:"last_applied_at,omitempty"`
+	LastApplyStatus  string                `json:"lastApplyStatus,omitempty" yaml:"last_apply_status,omitempty"`
+	LastApplyMessage string                `json:"lastApplyMessage,omitempty" yaml:"last_apply_message,omitempty"`
+}
+
+type PublicationAuth struct {
+	Username string `json:"username,omitempty" yaml:"username,omitempty"`
+	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+	Token    string `json:"token,omitempty" yaml:"token,omitempty"`
+}
+
+type PublicationConfig struct {
+	Name        string          `json:"name" yaml:"name"`
+	Type        string          `json:"type" yaml:"type"`
+	Enabled     bool            `json:"enabled" yaml:"enabled"`
+	Route       string          `json:"route" yaml:"route"`
+	Listen      string          `json:"listen,omitempty" yaml:"listen,omitempty"`
+	Port        int             `json:"port,omitempty" yaml:"port,omitempty"`
+	Auth        PublicationAuth `json:"auth" yaml:"auth"`
+	AccessScope string          `json:"accessScope,omitempty" yaml:"access_scope,omitempty"`
+	Format      string          `json:"format,omitempty" yaml:"format,omitempty"`
+}
+
 type Config struct {
-	Server         ServerConfig   `json:"server" yaml:"server"`
-	Admin          AdminConfig    `json:"admin" yaml:"admin"`
-	Runtime        RuntimeConfig  `json:"runtime" yaml:"runtime"`
-	Subscriptions  []Subscription `json:"subscriptions" yaml:"subscriptions"`
-	LandingProxies []LandingProxy `json:"landing_proxies" yaml:"landing_proxies"`
-	EgressGroups   []EgressGroup  `json:"egress_groups" yaml:"egress_groups"`
-	TransitRoutes  []TransitRoute `json:"transit_routes,omitempty" yaml:"transit_routes,omitempty"`
-	Listeners      []Listener     `json:"listeners" yaml:"listeners"`
+	Server       ServerConfig        `json:"server" yaml:"server"`
+	Admin        AdminConfig         `json:"admin" yaml:"admin"`
+	Runtime      RuntimeConfig       `json:"runtime" yaml:"runtime"`
+	NodeSources  []NodeSource        `json:"node_sources" yaml:"node_sources"`
+	Routes       []RouteConfig       `json:"routes" yaml:"routes"`
+	Usage        UsageConfig         `json:"usage" yaml:"usage"`
+	Publications []PublicationConfig `json:"publications" yaml:"publications"`
+
+	Subscriptions  []Subscription `json:"-" yaml:"-"`
+	LandingProxies []LandingProxy `json:"-" yaml:"-"`
+	EgressGroups   []EgressGroup  `json:"-" yaml:"-"`
+	TransitRoutes  []TransitRoute `json:"-" yaml:"-"`
+	Listeners      []Listener     `json:"-" yaml:"-"`
 }
 
 type RuntimeLayout struct {
@@ -398,6 +521,10 @@ type SetupState struct {
 	Required             bool         `json:"required"`
 	NeedsPasswordReset   bool         `json:"needsPasswordReset"`
 	AdminUsername        string       `json:"adminUsername"`
+	HasNodeSources       bool         `json:"hasNodeSources"`
+	HasRoutes            bool         `json:"hasRoutes"`
+	HasUsage             bool         `json:"hasUsage"`
+	HasPublications      bool         `json:"hasPublications"`
 	HasSubscriptions     bool         `json:"hasSubscriptions"`
 	HasRealSubscriptions bool         `json:"hasRealSubscriptions"`
 	HasEgressGroups      bool         `json:"hasEgressGroups"`

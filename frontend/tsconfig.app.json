@@ -24,5 +24,14 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/pages/Subscriptions.tsx",
+    "src/pages/Interfaces.tsx",
+    "src/pages/TransitRoutes.tsx",
+    "src/pages/Listeners.tsx",
+    "src/pages/Dashboard.tsx",
+    "src/pages/Status.tsx",
+    "src/pages/Events.tsx"
+  ]
 }

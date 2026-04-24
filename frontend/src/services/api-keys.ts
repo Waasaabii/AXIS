@@ -6,6 +6,10 @@ export const apiKeys = {
   setupAdmin: "/api/setup/admin",
   status: "/api/status",
   config: "/api/config",
+  nodeSources: "/api/node-sources",
+  routes: "/api/routes",
+  usage: "/api/usage",
+  publications: "/api/publications",
   providers: "/api/providers",
   groups: "/api/groups",
   landingProxies: "/api/landing-proxies",
@@ -31,6 +35,16 @@ export const apiKeys = {
 export type ApiKey = typeof apiKeys[keyof typeof apiKeys]
 
 export const apiPath = {
+  nodeSource: (name: string) => `${apiKeys.nodeSources}/${encodeURIComponent(name)}`,
+  nodeSourceUpdate: (name: string) => `${apiKeys.nodeSources}/${encodeURIComponent(name)}/update`,
+  nodeSourceCheck: (name: string) => `${apiKeys.nodeSources}/${encodeURIComponent(name)}/check`,
+  nodeSourceConnection: (name: string) => `${apiKeys.nodeSources}/${encodeURIComponent(name)}/connection`,
+  nodeSourceBaotaConfig: (name: string) => `${apiKeys.nodeSources}/${encodeURIComponent(name)}/baota-config`,
+  route: (name: string) => `${apiKeys.routes}/${encodeURIComponent(name)}`,
+  routeUpdate: (name: string) => `${apiKeys.routes}/${encodeURIComponent(name)}/update`,
+  publication: (name: string) => `${apiKeys.publications}/${encodeURIComponent(name)}`,
+  publicationUpdate: (name: string) => `${apiKeys.publications}/${encodeURIComponent(name)}/update`,
+
   providerRefresh: (name: string) => `${apiKeys.providers}/${encodeURIComponent(name)}/refresh`,
 
   groupSelect: (groupName: string) => `${apiKeys.groups}/${encodeURIComponent(groupName)}/select`,

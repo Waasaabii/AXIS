@@ -1,4 +1,5 @@
 import type { components } from "@/generated/openapi"
+import type { BaotaConfigResponse, LocalNodeCheckResponse, LocalNodeConnectionResponse, NodeSource, PublicationConfig, RouteConfig, UsageView } from "./product-types"
 
 type Schemas = components["schemas"]
 
@@ -72,6 +73,23 @@ export interface AxisAPI {
   getStatus: () => Promise<StatusResponse>
   getConfig: () => Promise<ConfigEnvelope>
   saveConfig: (body: SaveConfigRequest) => Promise<SaveConfigResponse>
+  getNodeSources: () => Promise<NodeSource[]>
+  addNodeSource: (body: Partial<NodeSource>) => Promise<SaveConfigResponse>
+  updateNodeSource: (name: string, body: Partial<NodeSource>) => Promise<SaveConfigResponse>
+  deleteNodeSource: (name: string) => Promise<SaveConfigResponse>
+  checkLocalNode: (name: string) => Promise<LocalNodeCheckResponse>
+  getLocalNodeConnection: (name: string) => Promise<LocalNodeConnectionResponse>
+  getLocalNodeBaotaConfig: (name: string) => Promise<BaotaConfigResponse>
+  getRoutes: () => Promise<RouteConfig[]>
+  addRoute: (body: Partial<RouteConfig>) => Promise<SaveConfigResponse>
+  updateRoute: (name: string, body: Partial<RouteConfig>) => Promise<SaveConfigResponse>
+  deleteRoute: (name: string) => Promise<SaveConfigResponse>
+  getUsage: () => Promise<UsageView>
+  updateUsage: (body: Partial<UsageView>) => Promise<SaveConfigResponse>
+  getPublications: () => Promise<PublicationConfig[]>
+  addPublication: (body: Partial<PublicationConfig>) => Promise<SaveConfigResponse>
+  updatePublication: (name: string, body: Partial<PublicationConfig>) => Promise<SaveConfigResponse>
+  deletePublication: (name: string) => Promise<SaveConfigResponse>
   getProviders: () => Promise<ProviderListItem[]>
   refreshProvider: (name: string) => Promise<ProviderRefreshResponse>
   getGroups: () => Promise<GroupView[]>

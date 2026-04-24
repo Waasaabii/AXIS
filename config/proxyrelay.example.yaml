@@ -1,9 +1,6 @@
 # ============================================================================
-#  AXIS (Anycast X-Proxy Integration System) 配置文件模板
-#  运行态只允许保留在 AXIS_HOME/config/proxyrelay.yaml
-#  或开发 profile 的 AXIS_HOME/dev/config/proxyrelay.yaml
-#  或显式覆盖后的 PROXYRELAY_CONFIG。
-#  仓库内只保留这份模板，不再保留 config/proxyrelay.yaml。
+#  AXIS 配置文件模板
+#  核心模型：节点来源 → 线路组合 → 使用 / 发布
 # ============================================================================
 
 server:
@@ -13,7 +10,7 @@ server:
 
 admin:
   username: admin
-  password: ""           # 留空配合 password_hash 为空 → 该 profile 视为未初始化，启动后会要求先创建管理员账号和密码
+  password: ""
   password_hash: ""
   session_secret: ""
   session_ttl_hours: 12
@@ -25,71 +22,59 @@ runtime:
   external_secret: ""
   render_only: true
 
-# ── 订阅源 ────────────────────────────────────────────────────────────────
-# 将 url 替换为你的真实机场订阅地址
-subscriptions:
+node_sources:
   - name: my-airport
-    type: mihomo-http        # mihomo-http (Clash YAML) 或 clash-http (Base64)
-    url: https://example.com/your-subscription-url
-    interval: 3600
+    type: subscription
     enabled: true
-    health_check_url: https://www.gstatic.com/generate_204
-    health_check_interval: 300
+    protocol: mihomo-http
+    subscription:
+      url: https://example.com/your-subscription-url
+      interval: 3600
+      health_check_url: https://www.gstatic.com/generate_204
+      health_check_interval: 300
 
-# ── 出站路由群组 ──────────────────────────────────────────────────────────
-egress_groups:
-  - name: egress-hk-manual
-    provider: my-airport
-    mode: manual
-    filter: "(?i)港|hk|hong ?kong"
-    exclude_filter: ""
+  - name: landing-socks
+    type: proxy
+    enabled: false
+    protocol: socks5
+    endpoint:
+      server: landing.example.com
+      port: 1080
+      username: user
+      password: change-me
 
-  - name: egress-jp-manual
-    provider: my-airport
-    mode: manual
-    filter: "(?i)日|jp|japan"
-    exclude_filter: ""
+routes:
+  - name: hk-daily
+    enabled: true
+    entry:
+      source: my-airport
+      node: "(?i)港|hk|hong ?kong"
+    strategy: manual
+    health_check:
+      url: https://www.gstatic.com/generate_204
+      interval: 300
 
-  - name: egress-us-auto
-    provider: my-airport
-    mode: auto
-    filter: "(?i)美|us|united states|america"
-    exclude_filter: ""
-    health_check_url: https://www.gstatic.com/generate_204
-    interval: 300
+usage:
+  selected_route: hk-daily
+  local_proxy:
+    enabled: true
+    type: mixed
+    listen: 127.0.0.1
+    port: 7890
+    users: []
+  virtual_interface:
+    enabled: false
+    mode: system
 
-# ── 入站监听器 ────────────────────────────────────────────────────────────
-# 请修改 users 中的用户名和密码
-listeners:
-  - name: hk-socks
-    type: socks
+publications:
+  - name: hk-for-lan
+    type: http_proxy
+    enabled: false
+    route: hk-daily
     listen: 0.0.0.0
     port: 10801
-    udp: true
-    enabled: true
-    users:
-      - username: user_hk
-        password: change-me
-    egress_group: egress-hk-manual
-
-  - name: jp-socks
-    type: socks
-    listen: 0.0.0.0
-    port: 10802
-    udp: true
-    enabled: true
-    users:
-      - username: user_jp
-        password: change-me
-    egress_group: egress-jp-manual
-
-  - name: us-socks
-    type: socks
-    listen: 0.0.0.0
-    port: 10803
-    udp: true
-    enabled: true
-    users:
-      - username: user_us
-        password: change-me
-    egress_group: egress-us-auto
+    access_scope: lan
+    format: url
+    auth:
+      username: user_hk
+      password: change-me

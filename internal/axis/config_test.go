@@ -26,148 +26,96 @@ func TestResolveRuntimeDir(t *testing.T) {
 	}
 }
 
-func TestWriteConfig(t *testing.T) {
+func newValidProductConfig() *Config {
+	return &Config{
+		Server:  ServerConfig{Host: "127.0.0.1", Port: 9988},
+		Admin:   AdminConfig{Username: "admin", Password: "updated-pass", SessionTTLHours: 12},
+		Runtime: RuntimeConfig{Workdir: "../runtime", MihomoBinary: "mihomo", ExternalController: "http://127.0.0.1:9090", RenderOnly: true},
+		NodeSources: []NodeSource{{
+			Name:         "airport-main",
+			Type:         "subscription",
+			Enabled:      true,
+			Protocol:     "mihomo-http",
+			Subscription: NodeSourceSubscription{URL: "https://sub.example.net/real", Interval: 3600},
+		}},
+		Routes: []RouteConfig{{
+			Name:    "daily",
+			Enabled: true,
+			Entry:   RouteEndpointRef{Source: "airport-main"},
+		}},
+		Usage: UsageConfig{SelectedRoute: "daily", LocalProxy: LocalProxyUsage{Enabled: true, Type: "mixed", Listen: "127.0.0.1", Port: 7890}, VirtualInterface: VirtualInterfaceUsage{Mode: "system"}},
+		Publications: []PublicationConfig{{
+			Name:    "daily-lan",
+			Type:    "http_proxy",
+			Enabled: true,
+			Route:   "daily",
+			Listen:  "0.0.0.0",
+			Port:    10801,
+			Auth:    PublicationAuth{Username: "user", Password: "secret"},
+		}},
+	}
+}
+
+func TestWriteConfigUsesProductModel(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "proxyrelay.yaml")
-	config := &Config{
-		Server:         ServerConfig{Host: "127.0.0.1", Port: 9988},
-		Admin:          AdminConfig{Username: "admin", Password: "updated-pass", SessionTTLHours: 12},
-		Runtime:        RuntimeConfig{Workdir: "../runtime", MihomoBinary: "mihomo", ExternalController: "http://127.0.0.1:9090", RenderOnly: true},
-		Subscriptions:  []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true, HealthCheckURL: "https://www.gstatic.com/generate_204", HealthCheckInterval: 300}},
-		LandingProxies: []LandingProxy{{Name: "jp-egress", Type: "socks5", Server: "landing.example.com", Port: 443, Username: "relay", Password: "secret", Enabled: true}},
-		EgressGroups:   []EgressGroup{{Name: "egress-hk", Provider: "airport-main", Mode: "manual", Filter: "(?i)港", LandingProxy: "jp-egress"}},
-		Listeners:      []Listener{{Name: "hk-socks", Port: 10801, EgressGroup: "egress-hk", Enabled: true, UDP: true}},
-	}
-
-	if _, err := WriteConfig(configPath, config); err != nil {
+	if _, err := WriteConfig(configPath, newValidProductConfig()); err != nil {
 		t.Fatalf("WriteConfig() error = %v", err)
 	}
 	raw, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
-	if !strings.Contains(string(raw), "port: 9988") || !strings.Contains(string(raw), "password: updated-pass") || !strings.Contains(string(raw), "landing_proxies:") || !strings.Contains(string(raw), "landing_proxy: jp-egress") {
-		t.Fatalf("written config does not contain expected values:\n%s", string(raw))
+	body := string(raw)
+	if !strings.Contains(body, "node_sources:") || !strings.Contains(body, "routes:") || !strings.Contains(body, "publications:") {
+		t.Fatalf("written config does not contain product model:\n%s", body)
+	}
+	if strings.Contains(body, "egress_groups:") || strings.Contains(body, "listeners:") {
+		t.Fatalf("written config should not expose legacy fields:\n%s", body)
 	}
 }
 
-func TestValidateConfigRejectsUnknownLandingProxy(t *testing.T) {
-	config := &Config{
-		Server: ServerConfig{Host: "127.0.0.1", Port: 8787},
-		Admin:  AdminConfig{Username: "admin", Password: "admin", SessionTTLHours: 12},
-		Runtime: RuntimeConfig{
-			Workdir:            "../runtime",
-			MihomoBinary:       "mihomo",
-			ExternalController: "http://127.0.0.1:9090",
-			RenderOnly:         true,
-		},
-		Subscriptions: []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true}},
-		EgressGroups:  []EgressGroup{{Name: "egress-hk", Provider: "airport-main", Mode: "manual", LandingProxy: "missing-landing"}},
-		Listeners:     []Listener{{Name: "hk-socks", Port: 10801, EgressGroup: "egress-hk", Enabled: true, UDP: true}},
+func TestLoadConfigRejectsLegacyKeys(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "proxyrelay.yaml")
+	if err := os.WriteFile(configPath, []byte("subscriptions: []\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
 	}
-
-	if err := ValidateConfig(config); err == nil || !strings.Contains(err.Error(), "落地节点 missing-landing 不存在") {
-		t.Fatalf("expected unknown landing proxy error, got %v", err)
+	_, err := LoadConfig(configPath)
+	if err == nil || !strings.Contains(err.Error(), "node_sources") {
+		t.Fatalf("expected legacy config rejection, got %v", err)
 	}
 }
 
-func TestValidateConfigAcceptsManualProviderWithoutURL(t *testing.T) {
-	config := &Config{
-		Server: ServerConfig{Host: "127.0.0.1", Port: 8787},
-		Admin:  AdminConfig{Username: "admin", Password: "admin", SessionTTLHours: 12},
-		Runtime: RuntimeConfig{
-			Workdir:            "../runtime",
-			MihomoBinary:       "mihomo",
-			ExternalController: "http://127.0.0.1:9090",
-			RenderOnly:         true,
-		},
-		Subscriptions: []Subscription{{Name: "tokyo-fixed", Type: "socks5", Server: "proxy.example.com", Port: 9001, Enabled: true}},
-		EgressGroups:  []EgressGroup{{Name: "egress-fixed", Provider: "tokyo-fixed", Mode: "manual"}},
-		Listeners:     []Listener{{Name: "fixed-socks", Port: 10801, EgressGroup: "egress-fixed", Enabled: true, UDP: true}},
+func TestValidateConfigRejectsMissingRouteSource(t *testing.T) {
+	config := newValidProductConfig()
+	config.Routes[0].Entry.Source = "missing"
+	if err := ValidateConfig(config); err == nil || !strings.Contains(err.Error(), "不存在") {
+		t.Fatalf("expected missing source error, got %v", err)
 	}
+}
 
+func TestValidateConfigRequiresPublicationAuth(t *testing.T) {
+	config := newValidProductConfig()
+	config.Publications[0].Auth = PublicationAuth{}
+	if err := ValidateConfig(config); err == nil || !strings.Contains(err.Error(), "必须设置") {
+		t.Fatalf("expected auth validation error, got %v", err)
+	}
+}
+
+func TestValidateConfigAcceptsProxyNodeSource(t *testing.T) {
+	config := newValidProductConfig()
+	config.NodeSources = []NodeSource{{Name: "tokyo-fixed", Type: "proxy", Enabled: true, Protocol: "socks5", Endpoint: NodeSourceEndpoint{Server: "proxy.example.com", Port: 9001}}}
+	config.Routes[0].Entry.Source = "tokyo-fixed"
 	if err := ValidateConfig(config); err != nil {
 		t.Fatalf("ValidateConfig() error = %v", err)
 	}
 }
 
-func TestValidateConfigRejectsFallbackGroupWithoutProxies(t *testing.T) {
-	config := &Config{
-		Server: ServerConfig{Host: "127.0.0.1", Port: 8787},
-		Admin:  AdminConfig{Username: "admin", Password: "admin", SessionTTLHours: 12},
-		Runtime: RuntimeConfig{
-			Workdir:            "../runtime",
-			MihomoBinary:       "mihomo",
-			ExternalController: "http://127.0.0.1:9090",
-			RenderOnly:         true,
-		},
-		Subscriptions: []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true}},
-		EgressGroups:  []EgressGroup{{Name: "egress-hk-fallback", Provider: "airport-main", Mode: "fallback"}},
-		Listeners:     []Listener{{Name: "hk-socks", Port: 10801, EgressGroup: "egress-hk-fallback", Enabled: true, UDP: true}},
-	}
-
-	if err := ValidateConfig(config); err == nil || !strings.Contains(err.Error(), "顺序容灾组 egress-hk-fallback 至少需要选择一个节点") {
-		t.Fatalf("expected fallback proxy validation error, got %v", err)
-	}
-}
-
-func TestValidateConfigAcceptsTransitRouteAndTransitListener(t *testing.T) {
-	config := &Config{
-		Server: ServerConfig{Host: "127.0.0.1", Port: 8787},
-		Admin:  AdminConfig{Username: "admin", Password: "admin", SessionTTLHours: 12},
-		Runtime: RuntimeConfig{
-			Workdir:            "../runtime",
-			MihomoBinary:       "mihomo",
-			ExternalController: "http://127.0.0.1:9090",
-			RenderOnly:         true,
-		},
-		Subscriptions: []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true}},
-		EgressGroups:  []EgressGroup{{Name: "egress-hk", Provider: "airport-main", Mode: "manual"}},
-		TransitRoutes: []TransitRoute{{
-			Name:              "hk-transit",
-			Enabled:           true,
-			UpstreamProvider:  "airport-main",
-			UpstreamProxyName: "HK 01",
-			EgressGroup:       "egress-hk",
-		}},
-		Listeners: []Listener{{
-			Name:         "transit-socks",
-			Port:         10801,
-			Enabled:      true,
-			UDP:          true,
-			RouteMode:    "transit",
-			TransitRoute: "hk-transit",
-		}},
-	}
-
+func TestValidateConfigAcceptsLocalNodeSource(t *testing.T) {
+	config := newValidProductConfig()
+	config.NodeSources = append(config.NodeSources, NodeSource{Name: "home-node", Type: "local_node", Enabled: true, Protocol: "trojan", LocalNode: LocalNodeConfig{AccessMode: "bt_reverse_proxy", Listen: "127.0.0.1", Port: 39013, ExternalHost: "axis.example.com", ExternalPort: 443, Route: "daily", Users: []ListenerUser{{Username: "axis", Password: "secret"}}}})
 	if err := ValidateConfig(config); err != nil {
 		t.Fatalf("ValidateConfig() error = %v", err)
-	}
-}
-
-func TestValidateConfigRejectsUnknownTransitRoute(t *testing.T) {
-	config := &Config{
-		Server: ServerConfig{Host: "127.0.0.1", Port: 8787},
-		Admin:  AdminConfig{Username: "admin", Password: "admin", SessionTTLHours: 12},
-		Runtime: RuntimeConfig{
-			Workdir:            "../runtime",
-			MihomoBinary:       "mihomo",
-			ExternalController: "http://127.0.0.1:9090",
-			RenderOnly:         true,
-		},
-		Subscriptions: []Subscription{{Name: "airport-main", URL: "https://example.com/sub", Type: "mihomo-http", Interval: 3600, Enabled: true}},
-		EgressGroups:  []EgressGroup{{Name: "egress-hk", Provider: "airport-main", Mode: "manual"}},
-		Listeners: []Listener{{
-			Name:         "transit-socks",
-			Port:         10801,
-			Enabled:      true,
-			UDP:          true,
-			RouteMode:    "transit",
-			TransitRoute: "missing-route",
-		}},
-	}
-
-	if err := ValidateConfig(config); err == nil || !strings.Contains(err.Error(), "绑定的中转线路 missing-route 不存在") {
-		t.Fatalf("expected missing transit route error, got %v", err)
 	}
 }
