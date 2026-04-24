@@ -42,6 +42,18 @@ func (s *Server) sessionFromRequest(r *http.Request) (bool, string) {
 	return s.service.auth.ReadSession(cookies["proxyrelay_session"])
 }
 
+func publicationFormatFromRequest(r *http.Request) string {
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if format != "" {
+		return format
+	}
+	userAgent := strings.ToLower(r.UserAgent())
+	if strings.Contains(userAgent, "shadowrocket") {
+		return "shadowrocket"
+	}
+	return "mihomo"
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	pathname := r.URL.Path
 	method := r.Method
@@ -87,13 +99,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if pathname == "/sub" && method == http.MethodGet {
-		result, err := s.service.BuildPublishedSubscription(r.URL.Query().Get("token"))
+		result, err := s.service.BuildPublishedSubscription(r.URL.Query().Get("token"), publicationFormatFromRequest(r))
 		if err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
-		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", result.Name+".yaml"))
+		w.Header().Set("Content-Type", result.ContentType)
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", result.Name+"."+result.Extension))
 		_, _ = w.Write([]byte(result.Content))
 		return
 	}
@@ -170,6 +182,46 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case pathname == "/api/status" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetStatus())
+			return
+		case pathname == "/api/core/capabilities" && method == http.MethodGet:
+			writeJSON(w, 200, s.service.GetCoreCapabilities())
+			return
+		case pathname == "/api/llm/models" && method == http.MethodGet:
+			response, status := s.service.ListLLMModels()
+			writeJSON(w, status, response)
+			return
+		case pathname == "/api/llm/models" && method == http.MethodPost:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			request := LLMTestRequest{BaseURL: stringValue(payload["base_url"]), APIKey: stringValue(payload["api_key"])}
+			response, status := s.service.ListLLMModelsWithConfig(request)
+			writeJSON(w, status, response)
+			return
+		case pathname == "/api/llm/test" && method == http.MethodPost:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			request := LLMTestRequest{BaseURL: stringValue(payload["base_url"]), APIKey: stringValue(payload["api_key"]), Model: stringValue(payload["model"]), Endpoint: stringValue(payload["endpoint"])}
+			response, status := s.service.TestLLM(request)
+			writeJSON(w, status, response)
+			return
+		case pathname == "/api/llm/proposals" && method == http.MethodPost:
+			payload, err := readJSONBody(r)
+			if err != nil {
+				writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			request := LLMProposalRequest{Kind: stringValue(payload["kind"]), Goal: stringValue(payload["goal"]), Target: stringValue(payload["target"]), Stream: boolValue(payload["stream"], false)}
+			if contextValue, ok := payload["context"].(map[string]any); ok {
+				request.Context = contextValue
+			}
+			response, status := s.service.BuildLLMProposal(request)
+			writeJSON(w, status, response)
 			return
 		case pathname == "/api/node-sources" && method == http.MethodGet:
 			writeJSON(w, 200, s.service.GetNodeSources())

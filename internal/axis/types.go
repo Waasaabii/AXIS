@@ -23,6 +23,15 @@ type RuntimeConfig struct {
 	RenderOnly         bool   `json:"render_only" yaml:"render_only"`
 }
 
+type LLMConfig struct {
+	Enabled        bool   `json:"enabled" yaml:"enabled"`
+	BaseURL        string `json:"base_url,omitempty" yaml:"base_url,omitempty"`
+	APIKey         string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+	Model          string `json:"model,omitempty" yaml:"model,omitempty"`
+	Endpoint       string `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
+}
+
 type Subscription struct {
 	Name                string            `json:"name" yaml:"name"`
 	Type                string            `json:"type" yaml:"type"`
@@ -222,6 +231,7 @@ type Config struct {
 	Routes       []RouteConfig       `json:"routes" yaml:"routes"`
 	Usage        UsageConfig         `json:"usage" yaml:"usage"`
 	Publications []PublicationConfig `json:"publications" yaml:"publications"`
+	LLM          LLMConfig           `json:"llm" yaml:"llm"`
 
 	Subscriptions  []Subscription `json:"-" yaml:"-"`
 	LandingProxies []LandingProxy `json:"-" yaml:"-"`
@@ -263,14 +273,30 @@ type ControllerState struct {
 }
 
 type NodeInfo struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	Server  string `json:"server"`
-	Port    int    `json:"port"`
-	Network string `json:"network,omitempty"`
-	TLS     string `json:"tls,omitempty"`
-	Source  string `json:"source,omitempty"`
+	ID               string         `json:"id"`
+	Name             string         `json:"name"`
+	Type             string         `json:"type"`
+	Server           string         `json:"server"`
+	Port             int            `json:"port"`
+	Network          string         `json:"network,omitempty"`
+	TLS              string         `json:"tls,omitempty"`
+	Source           string         `json:"source,omitempty"`
+	Raw              string         `json:"raw,omitempty"`
+	Username         string         `json:"username,omitempty"`
+	Password         string         `json:"password,omitempty"`
+	UUID             string         `json:"uuid,omitempty"`
+	SNI              string         `json:"sni,omitempty"`
+	Peer             string         `json:"peer,omitempty"`
+	SkipCertVerify   bool           `json:"skipCertVerify,omitempty"`
+	AllowInsecure    bool           `json:"allowInsecure,omitempty"`
+	Host             string         `json:"host,omitempty"`
+	Path             string         `json:"path,omitempty"`
+	ALPN             []string       `json:"alpn,omitempty"`
+	Obfs             string         `json:"obfs,omitempty"`
+	Query            map[string]any `json:"query,omitempty"`
+	Extra            map[string]any `json:"extra,omitempty"`
+	NodeClass        string         `json:"nodeClass,omitempty"`
+	FidelityWarnings []string       `json:"fidelityWarnings,omitempty"`
 }
 
 type ProviderRecord struct {
@@ -322,6 +348,7 @@ type AppState struct {
 
 type HostStatus struct {
 	Mode             string   `json:"mode"`
+	Platform         string   `json:"platform,omitempty"`
 	DesktopMode      bool     `json:"desktopMode"`
 	AutostartEnabled bool     `json:"autostartEnabled"`
 	AutostartManaged bool     `json:"autostartManaged"`

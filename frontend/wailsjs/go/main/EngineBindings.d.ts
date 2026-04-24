@@ -10,17 +10,33 @@ export function AddLandingProxy(arg1:Record<string, any>):Promise<Record<string,
 
 export function AddListener(arg1:Record<string, any>):Promise<Record<string, any>>;
 
+export function AddNodeSource(arg1:Record<string, any>):Promise<Record<string, any>>;
+
+export function AddPublication(arg1:Record<string, any>):Promise<Record<string, any>>;
+
+export function AddRoute(arg1:Record<string, any>):Promise<Record<string, any>>;
+
 export function AddSubscription(arg1:Record<string, any>):Promise<Record<string, any>>;
 
 export function AddTransitRoute(arg1:Record<string, any>):Promise<Record<string, any>>;
 
 export function BootstrapAdmin(arg1:Record<string, any>):Promise<Record<string, any>>;
 
+export function BuildLLMProposal(arg1:Record<string, any>):Promise<axis.LLMProposalResponse>;
+
+export function CheckLocalNode(arg1:string):Promise<axis.LocalNodeCheckResponse>;
+
 export function DeleteEgressGroup(arg1:string):Promise<Record<string, any>>;
 
 export function DeleteLandingProxy(arg1:string):Promise<Record<string, any>>;
 
 export function DeleteListener(arg1:string):Promise<Record<string, any>>;
+
+export function DeleteNodeSource(arg1:string):Promise<Record<string, any>>;
+
+export function DeletePublication(arg1:string):Promise<Record<string, any>>;
+
+export function DeleteRoute(arg1:string):Promise<Record<string, any>>;
 
 export function DeleteSubscription(arg1:string):Promise<Record<string, any>>;
 
@@ -34,6 +50,8 @@ export function GetConfig():Promise<Record<string, any>>;
 
 export function GetController():Promise<Record<string, any>>;
 
+export function GetCoreCapabilities():Promise<axis.CoreCapabilitiesResponse>;
+
 export function GetEvents():Promise<Array<axis.EventEntry>>;
 
 export function GetGroups():Promise<Array<axis.GroupView>>;
@@ -42,11 +60,21 @@ export function GetLandingProxies():Promise<Array<axis.LandingProxyView>>;
 
 export function GetListeners():Promise<Array<axis.ListenerView>>;
 
+export function GetLocalNodeBaotaConfig(arg1:string):Promise<axis.BaotaConfigResponse>;
+
+export function GetLocalNodeConnection(arg1:string):Promise<axis.LocalNodeConnectionResponse>;
+
 export function GetMihomoVersions():Promise<axis.MihomoVersionsResponse>;
+
+export function GetNodeSources():Promise<Array<axis.NodeSource>>;
 
 export function GetProviders():Promise<Array<Record<string, any>>>;
 
+export function GetPublications():Promise<Array<axis.PublicationConfig>>;
+
 export function GetRenderedConfig():Promise<Record<string, any>>;
+
+export function GetRoutes():Promise<Array<axis.RouteConfig>>;
 
 export function GetRuntimePreflight():Promise<axis.RuntimePreflightSnapshot>;
 
@@ -58,11 +86,17 @@ export function GetStatus():Promise<Record<string, any>>;
 
 export function GetTransitRoutes():Promise<Array<axis.TransitRouteView>>;
 
+export function GetUsage():Promise<axis.UsageView>;
+
 export function HealthcheckGroup(arg1:string):Promise<Record<string, any>>;
 
 export function HealthcheckTransitRoute(arg1:string):Promise<Record<string, any>>;
 
 export function InstallMihomoVersion(arg1:string):Promise<Record<string, any>>;
+
+export function ListLLMModels():Promise<axis.LLMModelsResponse>;
+
+export function ListLLMModelsWithConfig(arg1:Record<string, any>):Promise<axis.LLMModelsResponse>;
 
 export function Login(arg1:Record<string, any>):Promise<Record<string, any>>;
 
@@ -78,6 +112,8 @@ export function SaveConfig(arg1:Record<string, any>):Promise<Record<string, any>
 
 export function SelectGroup(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
 
+export function TestLLM(arg1:Record<string, any>):Promise<axis.LLMTestResponse>;
+
 export function ToggleSubscription(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
 
 export function UpdateEgressGroup(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
@@ -86,8 +122,16 @@ export function UpdateLandingProxy(arg1:string,arg2:Record<string, any>):Promise
 
 export function UpdateListener(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
 
+export function UpdateNodeSource(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
+
 export function UpdatePassword(arg1:Record<string, any>):Promise<Record<string, any>>;
+
+export function UpdatePublication(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
+
+export function UpdateRoute(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
 
 export function UpdateSubscription(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
 
 export function UpdateTransitRoute(arg1:string,arg2:Record<string, any>):Promise<Record<string, any>>;
+
+export function UpdateUsage(arg1:Record<string, any>):Promise<Record<string, any>>;

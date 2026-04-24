@@ -182,6 +182,73 @@ func (e *EngineBindings) GetStatus() (map[string]any, error) {
 	return service.GetStatus(), nil
 }
 
+func (e *EngineBindings) GetCoreCapabilities() (axis.CoreCapabilitiesResponse, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.CoreCapabilitiesResponse{}, err
+	}
+	return service.GetCoreCapabilities(), nil
+}
+
+func (e *EngineBindings) ListLLMModels() (axis.LLMModelsResponse, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.LLMModelsResponse{}, err
+	}
+	result, status := service.ListLLMModels()
+	if status >= 500 {
+		return result, errors.New(result.Message)
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) ListLLMModelsWithConfig(payload map[string]any) (axis.LLMModelsResponse, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.LLMModelsResponse{}, err
+	}
+	request := axis.LLMTestRequest{BaseURL: payloadString(payload, "base_url"), APIKey: payloadString(payload, "api_key")}
+	result, status := service.ListLLMModelsWithConfig(request)
+	if status >= 500 {
+		return result, errors.New(result.Message)
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) TestLLM(payload map[string]any) (axis.LLMTestResponse, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.LLMTestResponse{}, err
+	}
+	request := axis.LLMTestRequest{BaseURL: payloadString(payload, "base_url"), APIKey: payloadString(payload, "api_key"), Model: payloadString(payload, "model"), Endpoint: payloadString(payload, "endpoint")}
+	result, status := service.TestLLM(request)
+	if status >= 400 {
+		return result, errors.New(result.Message)
+	}
+	return result, nil
+}
+
+func (e *EngineBindings) BuildLLMProposal(payload map[string]any) (axis.LLMProposalResponse, error) {
+	service, err := e.serviceOrError()
+	if err != nil {
+		return axis.LLMProposalResponse{}, err
+	}
+	request := axis.LLMProposalRequest{
+		Kind:   payloadString(payload, "kind"),
+		Goal:   payloadString(payload, "goal"),
+		Target: payloadString(payload, "target"),
+		Stream: payloadBool(payload, "stream"),
+	}
+	if contextValue, ok := payload["context"].(map[string]any); ok {
+		request.Context = contextValue
+	}
+	result, status := service.BuildLLMProposal(request)
+	if err := bindingError(map[string]any{"ok": result.OK, "message": result.Message}, status); err != nil {
+		return axis.LLMProposalResponse{}, err
+	}
+	return result, nil
+}
+
 func (e *EngineBindings) GetConfig() (map[string]any, error) {
 	service, err := e.serviceOrError()
 	if err != nil {
@@ -804,6 +871,14 @@ func (h *HostBindings) CheckForUpdates() (map[string]any, error) {
 		return nil, errors.New("service 未初始化")
 	}
 	return h.service.CheckForUpdates()
+}
+
+func payloadString(payload map[string]any, key string) string {
+	value, ok := payload[key].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
 
 func payloadBool(payload map[string]any, key string) bool {

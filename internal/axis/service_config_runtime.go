@@ -11,6 +11,9 @@ func (s *Service) cloneConfigForResponse() Config {
 	clone.Admin.Password = ""
 	clone.Admin.PasswordHash = ""
 	clone.Admin.SessionSecret = ""
+	if clone.LLM.APIKey != "" {
+		clone.LLM.APIKey = ""
+	}
 	return clone
 }
 
@@ -19,6 +22,9 @@ func (s *Service) mergeAdminSecrets(next *Config) *Config {
 	out.Admin.Password = s.config.Admin.Password
 	out.Admin.PasswordHash = s.config.Admin.PasswordHash
 	out.Admin.SessionSecret = s.config.Admin.SessionSecret
+	if strings.TrimSpace(out.LLM.APIKey) == "" {
+		out.LLM.APIKey = s.config.LLM.APIKey
+	}
 	return &out
 }
 

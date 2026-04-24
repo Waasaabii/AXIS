@@ -7,3 +7,7 @@ desktop/build/
 *.log
 .DS_Store
 .ace-tool/
+
+# build cache
+dist/
+frontend/tsconfig*.tsbuildinfo

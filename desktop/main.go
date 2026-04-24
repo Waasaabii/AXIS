@@ -4,12 +4,15 @@ import (
 	"context"
 	"log"
 	"os"
+	"runtime"
 
 	frontendassets "github.com/Waasaabii/AXIS/frontend"
 	"github.com/Waasaabii/AXIS/internal/axis"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 func main() {
@@ -42,7 +45,7 @@ func main() {
 		staticFS = os.DirFS(".")
 	}
 
-	err = wails.Run(&options.App{
+	appOptions := &options.App{
 		Title:             "AXIS",
 		Width:             1360,
 		Height:            920,
@@ -69,7 +72,9 @@ func main() {
 			_ = host.Shutdown()
 			_ = service.Close()
 		},
-	})
+	}
+	applyPlatformWindowOptions(appOptions)
+	err = wails.Run(appOptions)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -95,4 +100,24 @@ func configPath() string {
 		log.Fatal(err)
 	}
 	return resolvedPath
+}
+
+func applyPlatformWindowOptions(appOptions *options.App) {
+	if appOptions == nil {
+		return
+	}
+	appOptions.CSSDragProperty = "--wails-draggable"
+	appOptions.CSSDragValue = "drag"
+	switch runtime.GOOS {
+	case "darwin":
+		appOptions.Mac = &mac.Options{
+			TitleBar:            mac.TitleBarHiddenInset(),
+			WindowIsTranslucent: true,
+		}
+	case "windows":
+		appOptions.Frameless = true
+		appOptions.Windows = &windows.Options{
+			Theme: windows.SystemDefault,
+		}
+	}
 }

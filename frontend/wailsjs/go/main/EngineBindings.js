@@ -18,6 +18,18 @@ export function AddListener(arg1) {
   return window['go']['main']['EngineBindings']['AddListener'](arg1);
 }
 
+export function AddNodeSource(arg1) {
+  return window['go']['main']['EngineBindings']['AddNodeSource'](arg1);
+}
+
+export function AddPublication(arg1) {
+  return window['go']['main']['EngineBindings']['AddPublication'](arg1);
+}
+
+export function AddRoute(arg1) {
+  return window['go']['main']['EngineBindings']['AddRoute'](arg1);
+}
+
 export function AddSubscription(arg1) {
   return window['go']['main']['EngineBindings']['AddSubscription'](arg1);
 }
@@ -30,6 +42,14 @@ export function BootstrapAdmin(arg1) {
   return window['go']['main']['EngineBindings']['BootstrapAdmin'](arg1);
 }
 
+export function BuildLLMProposal(arg1) {
+  return window['go']['main']['EngineBindings']['BuildLLMProposal'](arg1);
+}
+
+export function CheckLocalNode(arg1) {
+  return window['go']['main']['EngineBindings']['CheckLocalNode'](arg1);
+}
+
 export function DeleteEgressGroup(arg1) {
   return window['go']['main']['EngineBindings']['DeleteEgressGroup'](arg1);
 }
@@ -40,6 +60,18 @@ export function DeleteLandingProxy(arg1) {
 
 export function DeleteListener(arg1) {
   return window['go']['main']['EngineBindings']['DeleteListener'](arg1);
+}
+
+export function DeleteNodeSource(arg1) {
+  return window['go']['main']['EngineBindings']['DeleteNodeSource'](arg1);
+}
+
+export function DeletePublication(arg1) {
+  return window['go']['main']['EngineBindings']['DeletePublication'](arg1);
+}
+
+export function DeleteRoute(arg1) {
+  return window['go']['main']['EngineBindings']['DeleteRoute'](arg1);
 }
 
 export function DeleteSubscription(arg1) {
@@ -66,6 +98,10 @@ export function GetController() {
   return window['go']['main']['EngineBindings']['GetController']();
 }
 
+export function GetCoreCapabilities() {
+  return window['go']['main']['EngineBindings']['GetCoreCapabilities']();
+}
+
 export function GetEvents() {
   return window['go']['main']['EngineBindings']['GetEvents']();
 }
@@ -82,16 +118,36 @@ export function GetListeners() {
   return window['go']['main']['EngineBindings']['GetListeners']();
 }
 
+export function GetLocalNodeBaotaConfig(arg1) {
+  return window['go']['main']['EngineBindings']['GetLocalNodeBaotaConfig'](arg1);
+}
+
+export function GetLocalNodeConnection(arg1) {
+  return window['go']['main']['EngineBindings']['GetLocalNodeConnection'](arg1);
+}
+
 export function GetMihomoVersions() {
   return window['go']['main']['EngineBindings']['GetMihomoVersions']();
+}
+
+export function GetNodeSources() {
+  return window['go']['main']['EngineBindings']['GetNodeSources']();
 }
 
 export function GetProviders() {
   return window['go']['main']['EngineBindings']['GetProviders']();
 }
 
+export function GetPublications() {
+  return window['go']['main']['EngineBindings']['GetPublications']();
+}
+
 export function GetRenderedConfig() {
   return window['go']['main']['EngineBindings']['GetRenderedConfig']();
+}
+
+export function GetRoutes() {
+  return window['go']['main']['EngineBindings']['GetRoutes']();
 }
 
 export function GetRuntimePreflight() {
@@ -114,6 +170,10 @@ export function GetTransitRoutes() {
   return window['go']['main']['EngineBindings']['GetTransitRoutes']();
 }
 
+export function GetUsage() {
+  return window['go']['main']['EngineBindings']['GetUsage']();
+}
+
 export function HealthcheckGroup(arg1) {
   return window['go']['main']['EngineBindings']['HealthcheckGroup'](arg1);
 }
@@ -124,6 +184,14 @@ export function HealthcheckTransitRoute(arg1) {
 
 export function InstallMihomoVersion(arg1) {
   return window['go']['main']['EngineBindings']['InstallMihomoVersion'](arg1);
+}
+
+export function ListLLMModels() {
+  return window['go']['main']['EngineBindings']['ListLLMModels']();
+}
+
+export function ListLLMModelsWithConfig(arg1) {
+  return window['go']['main']['EngineBindings']['ListLLMModelsWithConfig'](arg1);
 }
 
 export function Login(arg1) {
@@ -154,6 +222,10 @@ export function SelectGroup(arg1, arg2) {
   return window['go']['main']['EngineBindings']['SelectGroup'](arg1, arg2);
 }
 
+export function TestLLM(arg1) {
+  return window['go']['main']['EngineBindings']['TestLLM'](arg1);
+}
+
 export function ToggleSubscription(arg1, arg2) {
   return window['go']['main']['EngineBindings']['ToggleSubscription'](arg1, arg2);
 }
@@ -170,8 +242,20 @@ export function UpdateListener(arg1, arg2) {
   return window['go']['main']['EngineBindings']['UpdateListener'](arg1, arg2);
 }
 
+export function UpdateNodeSource(arg1, arg2) {
+  return window['go']['main']['EngineBindings']['UpdateNodeSource'](arg1, arg2);
+}
+
 export function UpdatePassword(arg1) {
   return window['go']['main']['EngineBindings']['UpdatePassword'](arg1);
+}
+
+export function UpdatePublication(arg1, arg2) {
+  return window['go']['main']['EngineBindings']['UpdatePublication'](arg1, arg2);
+}
+
+export function UpdateRoute(arg1, arg2) {
+  return window['go']['main']['EngineBindings']['UpdateRoute'](arg1, arg2);
 }
 
 export function UpdateSubscription(arg1, arg2) {
@@ -180,4 +264,8 @@ export function UpdateSubscription(arg1, arg2) {
 
 export function UpdateTransitRoute(arg1, arg2) {
   return window['go']['main']['EngineBindings']['UpdateTransitRoute'](arg1, arg2);
+}
+
+export function UpdateUsage(arg1) {
+  return window['go']['main']['EngineBindings']['UpdateUsage'](arg1);
 }

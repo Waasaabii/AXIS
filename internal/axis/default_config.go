@@ -26,5 +26,6 @@ func BuildDefaultConfig(configPath string) *Config {
 		Routes:       []RouteConfig{},
 		Usage:        UsageConfig{LocalProxy: LocalProxyUsage{Type: "mixed", Listen: "127.0.0.1", Port: 7890}, VirtualInterface: VirtualInterfaceUsage{Mode: "system"}},
 		Publications: []PublicationConfig{},
+		LLM:          LLMConfig{Endpoint: "responses", TimeoutSeconds: 60},
 	}
 }

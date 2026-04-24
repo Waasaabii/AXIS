@@ -177,7 +177,7 @@ func TestBuildPublishedSubscriptionForProxyRoute(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 	defer service.Close()
-	result, err := service.BuildPublishedSubscription("token-123")
+	result, err := service.BuildPublishedSubscription("token-123", "mihomo")
 	if err != nil {
 		t.Fatalf("BuildPublishedSubscription() error = %v", err)
 	}
@@ -207,7 +207,7 @@ func TestBuildPublishedSubscriptionOutputsCompatibleHysteria2(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 	defer service.Close()
-	result, err := service.BuildPublishedSubscription("token-123")
+	result, err := service.BuildPublishedSubscription("token-123", "mihomo")
 	if err != nil {
 		t.Fatalf("BuildPublishedSubscription() error = %v", err)
 	}
@@ -218,5 +218,41 @@ func TestBuildPublishedSubscriptionOutputsCompatibleHysteria2(t *testing.T) {
 	}
 	if strings.Contains(result.Content, "tls: true") {
 		t.Fatalf("hysteria2 subscription should not include generic tls flag:\n%s", result.Content)
+	}
+}
+
+func TestBuildPublishedSubscriptionOutputsURIFormat(t *testing.T) {
+	config := newValidProductConfig()
+	config.NodeSources = []NodeSource{
+		{Name: "trojan-node", Type: "proxy", Enabled: true, Protocol: "trojan", Endpoint: NodeSourceEndpoint{Server: "axis.example.com", Port: 39013, Password: "trojan-secret", TLS: true, SNI: "axis.example.com"}},
+		{Name: "hy2-node", Type: "proxy", Enabled: true, Protocol: "hysteria2", Endpoint: NodeSourceEndpoint{Server: "axis.example.com", Port: 39014, Password: "hy2-secret", TLS: true, SNI: "axis.example.com"}},
+	}
+	config.Routes = []RouteConfig{{Name: "phone-route", Enabled: true, Entry: RouteEndpointRef{Source: "trojan-node"}, Landing: RouteEndpointRef{Source: "hy2-node"}}}
+	config.Usage.SelectedRoute = "phone-route"
+	config.Publications = []PublicationConfig{{Name: "phone-sub", Type: "subscription", Enabled: true, Route: "phone-route", Auth: PublicationAuth{Token: "token-123"}}}
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config", "proxyrelay.yaml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if _, err := WriteConfig(configPath, config); err != nil {
+		t.Fatalf("WriteConfig() error = %v", err)
+	}
+	service, err := NewService(configPath)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	defer service.Close()
+	result, err := service.BuildPublishedSubscription("token-123", "shadowrocket")
+	if err != nil {
+		t.Fatalf("BuildPublishedSubscription() error = %v", err)
+	}
+	for _, expected := range []string{"trojan://trojan-secret@axis.example.com:39013?", "hysteria2://hy2-secret@axis.example.com:39014/?", "sni=axis.example.com", "insecure=0"} {
+		if !strings.Contains(result.Content, expected) {
+			t.Fatalf("uri subscription missing %q:\n%s", expected, result.Content)
+		}
+	}
+	if result.ContentType != "text/plain; charset=utf-8" || result.Extension != "txt" {
+		t.Fatalf("unexpected response metadata: %#v", result)
 	}
 }

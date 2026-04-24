@@ -1,6 +1,9 @@
 package axis
 
-import "strconv"
+import (
+	"runtime"
+	"strconv"
+)
 
 func normalizeState(state *AppState) *AppState {
 	if state == nil {
@@ -48,6 +51,7 @@ func (s *Service) GetHostStatus() HostStatus {
 
 	status := HostStatus{
 		Mode:             host.Mode(),
+		Platform:         runtime.GOOS,
 		DesktopMode:      host.Mode() == "desktop",
 		AutostartEnabled: host.AutostartEnabled(),
 		AutostartManaged: host.AutostartManaged(),

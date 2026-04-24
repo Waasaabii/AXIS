@@ -554,14 +554,39 @@ func parseURLProtocol(protocol, line string) (NodeInfo, error) {
 	}
 	port := 0
 	fmt.Sscanf(parsed.Port(), "%d", &port)
+	query := mapQueryValues(parsed.Query())
+	password := ""
+	username := ""
+	if parsed.User != nil {
+		username = parsed.User.Username()
+		password, _ = parsed.User.Password()
+		if password == "" {
+			password = username
+			username = ""
+		}
+	}
 	return NodeInfo{
-		Type:    protocol,
-		Name:    normalizeName(strings.TrimPrefix(parsed.Fragment, "#"), fmt.Sprintf("%s-%s:%s", protocol, parsed.Hostname(), parsed.Port())),
-		Server:  parsed.Hostname(),
-		Port:    port,
-		Network: parsed.Query().Get("type"),
-		TLS:     parsed.Query().Get("security"),
-		Source:  line,
+		Type:           protocol,
+		Name:           normalizeName(strings.TrimPrefix(parsed.Fragment, "#"), fmt.Sprintf("%s-%s:%s", protocol, parsed.Hostname(), parsed.Port())),
+		Server:         parsed.Hostname(),
+		Port:           port,
+		Network:        firstNonEmpty(parsed.Query().Get("type"), parsed.Query().Get("network")),
+		TLS:            firstNonEmpty(parsed.Query().Get("security"), parsed.Query().Get("tls")),
+		Source:         line,
+		Raw:            line,
+		Username:       username,
+		Password:       password,
+		UUID:           username,
+		SNI:            firstNonEmpty(parsed.Query().Get("sni"), parsed.Query().Get("servername")),
+		Peer:           parsed.Query().Get("peer"),
+		SkipCertVerify: truthyQuery(parsed.Query(), "insecure") || truthyQuery(parsed.Query(), "skip-cert-verify"),
+		AllowInsecure:  truthyQuery(parsed.Query(), "allowInsecure"),
+		Host:           firstNonEmpty(parsed.Query().Get("host"), parsed.Query().Get("headers")),
+		Path:           parsed.Query().Get("path"),
+		ALPN:           splitList(firstNonEmpty(parsed.Query().Get("alpn"), parsed.Query().Get("alpns"))),
+		Obfs:           firstNonEmpty(parsed.Query().Get("obfs"), parsed.Query().Get("obfs-password")),
+		Query:          query,
+		Extra:          preserveUnknownQuery(query, knownShareQueryKeys()),
 	}, nil
 }
 
@@ -577,15 +602,101 @@ func parseVmess(line string) (NodeInfo, error) {
 	}
 	port := 0
 	fmt.Sscanf(fmt.Sprint(payload["port"]), "%d", &port)
+	extra := cloneStringAnyMap(payload)
+	deleteKnown(extra, "v", "ps", "add", "port", "id", "aid", "scy", "net", "type", "host", "path", "tls", "sni")
 	return NodeInfo{
-		Type:    "vmess",
-		Name:    normalizeName(fmt.Sprint(payload["ps"]), fmt.Sprintf("vmess-%v:%v", payload["add"], payload["port"])),
-		Server:  fmt.Sprint(payload["add"]),
-		Port:    port,
-		Network: fmt.Sprint(payload["net"]),
-		TLS:     fmt.Sprint(payload["tls"]),
-		Source:  line,
+		Type:     "vmess",
+		Name:     normalizeName(fmt.Sprint(payload["ps"]), fmt.Sprintf("vmess-%v:%v", payload["add"], payload["port"])),
+		Server:   fmt.Sprint(payload["add"]),
+		Port:     port,
+		Network:  fmt.Sprint(payload["net"]),
+		TLS:      fmt.Sprint(payload["tls"]),
+		Source:   line,
+		Raw:      line,
+		UUID:     fmt.Sprint(payload["id"]),
+		Password: fmt.Sprint(payload["id"]),
+		SNI:      fmt.Sprint(payload["sni"]),
+		Host:     fmt.Sprint(payload["host"]),
+		Path:     fmt.Sprint(payload["path"]),
+		Extra:    extra,
 	}, nil
+}
+
+func mapQueryValues(values url.Values) map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make(map[string]any, len(values))
+	for key, item := range values {
+		if len(item) == 1 {
+			result[key] = item[0]
+		} else {
+			result[key] = item
+		}
+	}
+	return result
+}
+
+func truthyQuery(values url.Values, key string) bool {
+	value := strings.ToLower(strings.TrimSpace(values.Get(key)))
+	return value == "1" || value == "true" || value == "yes" || value == "allow"
+}
+
+func splitList(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	parts := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == '|' })
+	items := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			items = append(items, trimmed)
+		}
+	}
+	return items
+}
+
+func knownShareQueryKeys() map[string]struct{} {
+	keys := []string{"type", "network", "security", "tls", "sni", "servername", "peer", "insecure", "skip-cert-verify", "allowInsecure", "host", "headers", "path", "alpn", "alpns", "obfs", "obfs-password"}
+	result := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		result[key] = struct{}{}
+	}
+	return result
+}
+
+func preserveUnknownQuery(values map[string]any, known map[string]struct{}) map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+	extra := map[string]any{}
+	for key, value := range values {
+		if _, ok := known[key]; !ok {
+			extra[key] = value
+		}
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	return extra
+}
+
+func cloneStringAnyMap(input map[string]any) map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+	result := make(map[string]any, len(input))
+	for key, value := range input {
+		result[key] = value
+	}
+	return result
+}
+
+func deleteKnown(values map[string]any, keys ...string) {
+	for _, key := range keys {
+		delete(values, key)
+	}
 }
 
 func parseSS(line string) (NodeInfo, error) {
@@ -621,12 +732,15 @@ func parseSS(line string) (NodeInfo, error) {
 		cipher = credentialParts[0]
 	}
 	return NodeInfo{
-		Type:   "shadowsocks",
-		Name:   normalizeName(fragment, fmt.Sprintf("ss-%s:%d", serverSections[0], port)),
-		Server: serverSections[0],
-		Port:   port,
-		TLS:    cipher,
-		Source: line,
+		Type:     "shadowsocks",
+		Name:     normalizeName(fragment, fmt.Sprintf("ss-%s:%d", serverSections[0], port)),
+		Server:   serverSections[0],
+		Port:     port,
+		TLS:      cipher,
+		Source:   line,
+		Raw:      line,
+		Password: strings.TrimPrefix(credentialPart, cipher+":"),
+		Extra:    map[string]any{"cipher": cipher},
 	}, nil
 }
 
@@ -645,17 +759,99 @@ func parseClashYAML(text string) []NodeInfo {
 		if enabled, ok := proxy["tls"].(bool); ok && enabled {
 			tls = "tls"
 		}
-		nodes = append(nodes, NodeInfo{
-			Type:    fmt.Sprint(proxy["type"]),
-			Name:    normalizeName(fmt.Sprint(proxy["name"]), fmt.Sprintf("%v:%v", proxy["server"], proxy["port"])),
-			Server:  fmt.Sprint(proxy["server"]),
-			Port:    port,
-			Network: fmt.Sprint(proxy["network"]),
-			TLS:     tls,
-			Source:  "clash-yaml",
-		})
+		name := normalizeName(fmt.Sprint(proxy["name"]), fmt.Sprintf("%v:%v", proxy["server"], proxy["port"]))
+		extra := cloneStringAnyMap(proxy)
+		deleteKnown(extra, "name", "type", "server", "port", "network", "tls", "password", "username", "uuid", "sni", "servername", "skip-cert-verify", "udp", "ws-opts", "grpc-opts", "alpn", "obfs")
+		node := NodeInfo{
+			Type:           fmt.Sprint(proxy["type"]),
+			Name:           name,
+			Server:         fmt.Sprint(proxy["server"]),
+			Port:           port,
+			Network:        fmt.Sprint(proxy["network"]),
+			TLS:            tls,
+			Source:         "clash-yaml",
+			Username:       fmt.Sprint(proxy["username"]),
+			Password:       fmt.Sprint(proxy["password"]),
+			UUID:           fmt.Sprint(proxy["uuid"]),
+			SNI:            firstNonEmpty(fmt.Sprint(proxy["sni"]), fmt.Sprint(proxy["servername"])),
+			SkipCertVerify: boolMapValue(proxy, "skip-cert-verify"),
+			ALPN:           anyStringList(proxy["alpn"]),
+			Obfs:           fmt.Sprint(proxy["obfs"]),
+			Extra:          extra,
+		}
+		if wsOpts, ok := proxy["ws-opts"].(map[string]any); ok {
+			node.Path = fmt.Sprint(wsOpts["path"])
+			if headers, ok := wsOpts["headers"].(map[string]any); ok {
+				node.Host = firstNonEmpty(fmt.Sprint(headers["Host"]), fmt.Sprint(headers["host"]))
+			}
+		}
+		node = normalizeEmptyNodeInfo(node)
+		nodes = append(nodes, node)
 	}
 	return nodes
+}
+
+func boolMapValue(values map[string]any, key string) bool {
+	value, ok := values[key]
+	if !ok {
+		return false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		lower := strings.ToLower(strings.TrimSpace(typed))
+		return lower == "1" || lower == "true" || lower == "yes"
+	default:
+		return false
+	}
+}
+
+func anyStringList(value any) []string {
+	switch typed := value.(type) {
+	case []any:
+		items := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text := strings.TrimSpace(fmt.Sprint(item)); text != "" {
+				items = append(items, text)
+			}
+		}
+		return items
+	case []string:
+		return typed
+	case string:
+		return splitList(typed)
+	default:
+		return nil
+	}
+}
+
+func normalizeEmptyNodeInfo(node NodeInfo) NodeInfo {
+	if node.Username == "<nil>" {
+		node.Username = ""
+	}
+	if node.Password == "<nil>" {
+		node.Password = ""
+	}
+	if node.UUID == "<nil>" {
+		node.UUID = ""
+	}
+	if node.SNI == "<nil>" {
+		node.SNI = ""
+	}
+	if node.Host == "<nil>" {
+		node.Host = ""
+	}
+	if node.Path == "<nil>" {
+		node.Path = ""
+	}
+	if node.Obfs == "<nil>" {
+		node.Obfs = ""
+	}
+	if len(node.Extra) == 0 {
+		node.Extra = nil
+	}
+	return node
 }
 
 func ParseSubscriptionPayload(rawBody, sourceName string) []NodeInfo {

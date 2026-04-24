@@ -1,5 +1,51 @@
 export namespace axis {
 	
+	export class AxisConnectionConfig {
+	    url?: string;
+	    username?: string;
+	    password?: string;
+	    token?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AxisConnectionConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.token = source["token"];
+	    }
+	}
+	export class BaotaConfigResponse {
+	    ok: boolean;
+	    name: string;
+	    protocol: string;
+	    mode: string;
+	    target: string;
+	    snippet: string;
+	    steps: string[];
+	    warnings?: string[];
+	    applySupported: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BaotaConfigResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.name = source["name"];
+	        this.protocol = source["protocol"];
+	        this.mode = source["mode"];
+	        this.target = source["target"];
+	        this.snippet = source["snippet"];
+	        this.steps = source["steps"];
+	        this.warnings = source["warnings"];
+	        this.applySupported = source["applySupported"];
+	    }
+	}
 	export class BootstrapAuthStatus {
 	    authenticated: boolean;
 	    username?: string;
@@ -40,6 +86,10 @@ export namespace axis {
 	    required: boolean;
 	    needsPasswordReset: boolean;
 	    adminUsername: string;
+	    hasNodeSources: boolean;
+	    hasRoutes: boolean;
+	    hasUsage: boolean;
+	    hasPublications: boolean;
 	    hasSubscriptions: boolean;
 	    hasRealSubscriptions: boolean;
 	    hasEgressGroups: boolean;
@@ -56,6 +106,10 @@ export namespace axis {
 	        this.required = source["required"];
 	        this.needsPasswordReset = source["needsPasswordReset"];
 	        this.adminUsername = source["adminUsername"];
+	        this.hasNodeSources = source["hasNodeSources"];
+	        this.hasRoutes = source["hasRoutes"];
+	        this.hasUsage = source["hasUsage"];
+	        this.hasPublications = source["hasPublications"];
 	        this.hasSubscriptions = source["hasSubscriptions"];
 	        this.hasRealSubscriptions = source["hasRealSubscriptions"];
 	        this.hasEgressGroups = source["hasEgressGroups"];
@@ -142,6 +196,7 @@ export namespace axis {
 	}
 	export class HostStatus {
 	    mode: string;
+	    platform?: string;
 	    desktopMode: boolean;
 	    autostartEnabled: boolean;
 	    autostartManaged: boolean;
@@ -157,6 +212,7 @@ export namespace axis {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
+	        this.platform = source["platform"];
 	        this.desktopMode = source["desktopMode"];
 	        this.autostartEnabled = source["autostartEnabled"];
 	        this.autostartManaged = source["autostartManaged"];
@@ -188,6 +244,74 @@ export namespace axis {
 	        this.auth = this.convertValues(source["auth"], BootstrapAuthStatus);
 	        this.nextStep = source["nextStep"];
 	        this.blockingReason = source["blockingReason"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CapabilityLayer {
+	    protocol: string;
+	    import: string;
+	    preserve: string;
+	    publish: string;
+	    usage: string;
+	    create: string;
+	    diagnostics: string;
+	    warnings?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CapabilityLayer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.protocol = source["protocol"];
+	        this.import = source["import"];
+	        this.preserve = source["preserve"];
+	        this.publish = source["publish"];
+	        this.usage = source["usage"];
+	        this.create = source["create"];
+	        this.diagnostics = source["diagnostics"];
+	        this.warnings = source["warnings"];
+	    }
+	}
+	export class CoreCapabilitiesResponse {
+	    coreName: string;
+	    coreVersion?: string;
+	    coreDetected: boolean;
+	    checkedAt: string;
+	    protocols: CapabilityLayer[];
+	    axisTemplates: string[];
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CoreCapabilitiesResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.coreName = source["coreName"];
+	        this.coreVersion = source["coreVersion"];
+	        this.coreDetected = source["coreDetected"];
+	        this.checkedAt = source["checkedAt"];
+	        this.protocols = this.convertValues(source["protocols"], CapabilityLayer);
+	        this.axisTemplates = source["axisTemplates"];
+	        this.message = source["message"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -317,6 +441,147 @@ export namespace axis {
 		}
 	}
 	
+	export class LLMModelInfo {
+	    id: string;
+	    name?: string;
+	    displayName?: string;
+	    ownedBy?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LLMModelInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.displayName = source["displayName"];
+	        this.ownedBy = source["ownedBy"];
+	    }
+	}
+	export class LLMModelsResponse {
+	    ok: boolean;
+	    enabled: boolean;
+	    models: LLMModelInfo[];
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LLMModelsResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.enabled = source["enabled"];
+	        this.models = this.convertValues(source["models"], LLMModelInfo);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class LLMProposalStep {
+	    title: string;
+	    status: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LLMProposalStep(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	    }
+	}
+	export class LLMProposalResponse {
+	    ok: boolean;
+	    enabled: boolean;
+	    mode: string;
+	    kind: string;
+	    status: string;
+	    steps: LLMProposalStep[];
+	    proposal: Record<string, any>;
+	    warnings?: string[];
+	    needsTest: boolean;
+	    needsConfirm: boolean;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LLMProposalResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.enabled = source["enabled"];
+	        this.mode = source["mode"];
+	        this.kind = source["kind"];
+	        this.status = source["status"];
+	        this.steps = this.convertValues(source["steps"], LLMProposalStep);
+	        this.proposal = source["proposal"];
+	        this.warnings = source["warnings"];
+	        this.needsTest = source["needsTest"];
+	        this.needsConfirm = source["needsConfirm"];
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class LLMTestResponse {
+	    ok: boolean;
+	    endpoint: string;
+	    model: string;
+	    content?: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LLMTestResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.endpoint = source["endpoint"];
+	        this.model = source["model"];
+	        this.content = source["content"];
+	        this.message = source["message"];
+	    }
+	}
 	export class LandingProxyView {
 	    name: string;
 	    type: string;
@@ -439,6 +704,210 @@ export namespace axis {
 		    return a;
 		}
 	}
+	export class LocalNodeCheckItem {
+	    name: string;
+	    ok: boolean;
+	    message: string;
+	    action?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalNodeCheckItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.ok = source["ok"];
+	        this.message = source["message"];
+	        this.action = source["action"];
+	    }
+	}
+	export class LocalNodeCheckResponse {
+	    ok: boolean;
+	    name: string;
+	    checks: LocalNodeCheckItem[];
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalNodeCheckResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.name = source["name"];
+	        this.checks = this.convertValues(source["checks"], LocalNodeCheckItem);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class LocalNodeConfig {
+	    access_mode?: string;
+	    listen?: string;
+	    port?: number;
+	    external_host?: string;
+	    external_port?: number;
+	    users?: ListenerUser[];
+	    route?: string;
+	    certificate?: string;
+	    private_key?: string;
+	    tls?: boolean;
+	    sni?: string;
+	    skip_cert_verify?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalNodeConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.access_mode = source["access_mode"];
+	        this.listen = source["listen"];
+	        this.port = source["port"];
+	        this.external_host = source["external_host"];
+	        this.external_port = source["external_port"];
+	        this.users = this.convertValues(source["users"], ListenerUser);
+	        this.route = source["route"];
+	        this.certificate = source["certificate"];
+	        this.private_key = source["private_key"];
+	        this.tls = source["tls"];
+	        this.sni = source["sni"];
+	        this.skip_cert_verify = source["skip_cert_verify"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class LocalNodeConnection {
+	    username?: string;
+	    password?: string;
+	    address: string;
+	    url: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalNodeConnection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.address = source["address"];
+	        this.url = source["url"];
+	    }
+	}
+	export class LocalNodeConnectionResponse {
+	    ok: boolean;
+	    name: string;
+	    protocol: string;
+	    host: string;
+	    port: number;
+	    connections: LocalNodeConnection[];
+	    warnings?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalNodeConnectionResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.name = source["name"];
+	        this.protocol = source["protocol"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.connections = this.convertValues(source["connections"], LocalNodeConnection);
+	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class LocalProxyUsage {
+	    enabled: boolean;
+	    type: string;
+	    listen: string;
+	    port: number;
+	    users?: ListenerUser[];
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalProxyUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.type = source["type"];
+	        this.listen = source["listen"];
+	        this.port = source["port"];
+	        this.users = this.convertValues(source["users"], ListenerUser);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	export class MihomoVersionRecord {
 	    version: string;
@@ -532,6 +1001,234 @@ export namespace axis {
 		    return a;
 		}
 	}
+	export class NodeSourceEndpoint {
+	    server?: string;
+	    port?: number;
+	    username?: string;
+	    password?: string;
+	    tls?: boolean;
+	    sni?: string;
+	    skip_cert_verify?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NodeSourceEndpoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.server = source["server"];
+	        this.port = source["port"];
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.tls = source["tls"];
+	        this.sni = source["sni"];
+	        this.skip_cert_verify = source["skip_cert_verify"];
+	    }
+	}
+	export class NodeSourceSubscription {
+	    url?: string;
+	    interval?: number;
+	    health_check_url?: string;
+	    health_check_interval?: number;
+	    headers?: Record<string, string>;
+	    via?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NodeSourceSubscription(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.interval = source["interval"];
+	        this.health_check_url = source["health_check_url"];
+	        this.health_check_interval = source["health_check_interval"];
+	        this.headers = source["headers"];
+	        this.via = source["via"];
+	    }
+	}
+	export class NodeSource {
+	    name: string;
+	    type: string;
+	    enabled: boolean;
+	    protocol?: string;
+	    subscription?: NodeSourceSubscription;
+	    endpoint?: NodeSourceEndpoint;
+	    axis?: AxisConnectionConfig;
+	    local_node?: LocalNodeConfig;
+	    notes?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NodeSource(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.enabled = source["enabled"];
+	        this.protocol = source["protocol"];
+	        this.subscription = this.convertValues(source["subscription"], NodeSourceSubscription);
+	        this.endpoint = this.convertValues(source["endpoint"], NodeSourceEndpoint);
+	        this.axis = this.convertValues(source["axis"], AxisConnectionConfig);
+	        this.local_node = this.convertValues(source["local_node"], LocalNodeConfig);
+	        this.notes = source["notes"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class PublicationAuth {
+	    username?: string;
+	    password?: string;
+	    token?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PublicationAuth(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.token = source["token"];
+	    }
+	}
+	export class PublicationConfig {
+	    name: string;
+	    type: string;
+	    enabled: boolean;
+	    route: string;
+	    listen?: string;
+	    port?: number;
+	    auth: PublicationAuth;
+	    accessScope?: string;
+	    format?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PublicationConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.enabled = source["enabled"];
+	        this.route = source["route"];
+	        this.listen = source["listen"];
+	        this.port = source["port"];
+	        this.auth = this.convertValues(source["auth"], PublicationAuth);
+	        this.accessScope = source["accessScope"];
+	        this.format = source["format"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RouteHealthCheck {
+	    url?: string;
+	    interval?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RouteHealthCheck(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.interval = source["interval"];
+	    }
+	}
+	export class RouteEndpointRef {
+	    source?: string;
+	    node?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RouteEndpointRef(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.source = source["source"];
+	        this.node = source["node"];
+	    }
+	}
+	export class RouteConfig {
+	    name: string;
+	    enabled: boolean;
+	    entry?: RouteEndpointRef;
+	    strategy?: string;
+	    landing?: RouteEndpointRef;
+	    health_check?: RouteHealthCheck;
+	    notes?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RouteConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.enabled = source["enabled"];
+	        this.entry = this.convertValues(source["entry"], RouteEndpointRef);
+	        this.strategy = source["strategy"];
+	        this.landing = this.convertValues(source["landing"], RouteEndpointRef);
+	        this.health_check = this.convertValues(source["health_check"], RouteHealthCheck);
+	        this.notes = source["notes"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 	export class RuntimeCheck {
 	    key: string;
 	    title: string;
@@ -708,6 +1405,71 @@ export namespace axis {
 	        this.landingMissing = source["landingMissing"];
 	        this.landingDisabled = source["landingDisabled"];
 	    }
+	}
+	
+	export class VirtualInterfaceUsage {
+	    enabled: boolean;
+	    mode?: string;
+	    status?: string;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VirtualInterfaceUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.mode = source["mode"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	    }
+	}
+	export class UsageView {
+	    selectedRoute?: string;
+	    localProxy: LocalProxyUsage;
+	    virtualInterface: VirtualInterfaceUsage;
+	    currentRoute?: RouteConfig;
+	    ready: boolean;
+	    missingSteps: string[];
+	    lastAppliedAt?: string;
+	    lastApplyStatus?: string;
+	    lastApplyMessage?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UsageView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.selectedRoute = source["selectedRoute"];
+	        this.localProxy = this.convertValues(source["localProxy"], LocalProxyUsage);
+	        this.virtualInterface = this.convertValues(source["virtualInterface"], VirtualInterfaceUsage);
+	        this.currentRoute = this.convertValues(source["currentRoute"], RouteConfig);
+	        this.ready = source["ready"];
+	        this.missingSteps = source["missingSteps"];
+	        this.lastAppliedAt = source["lastAppliedAt"];
+	        this.lastApplyStatus = source["lastApplyStatus"];
+	        this.lastApplyMessage = source["lastApplyMessage"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

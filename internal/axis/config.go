@@ -93,6 +93,14 @@ func normalizeNewConfig(parsed Config, configPath string) *Config {
 		Routes:       parsed.Routes,
 		Usage:        parsed.Usage,
 		Publications: parsed.Publications,
+		LLM: LLMConfig{
+			Enabled:        parsed.LLM.Enabled,
+			BaseURL:        strings.TrimRight(strings.TrimSpace(parsed.LLM.BaseURL), "/"),
+			APIKey:         parsed.LLM.APIKey,
+			Model:          strings.TrimSpace(parsed.LLM.Model),
+			Endpoint:       firstNonEmpty(strings.TrimSpace(parsed.LLM.Endpoint), "responses"),
+			TimeoutSeconds: max(parsed.LLM.TimeoutSeconds, 60),
+		},
 	}
 	if parsed.Runtime.Workdir != "" || parsed.Runtime.MihomoBinary != "" || parsed.Runtime.ExternalController != "" || parsed.Runtime.ExternalSecret != "" || parsed.Runtime.RenderOnly {
 		config.Runtime.RenderOnly = parsed.Runtime.RenderOnly
@@ -195,6 +203,14 @@ func ValidateConfig(config *Config) error {
 	}
 	if config.Admin.Username == "" {
 		return errors.New("admin.username 不能为空")
+	}
+	if config.LLM.Enabled {
+		if strings.TrimSpace(config.LLM.BaseURL) == "" {
+			return errors.New("llm.base_url 不能为空")
+		}
+		if strings.TrimSpace(config.LLM.APIKey) == "" {
+			return errors.New("llm.api_key 不能为空")
+		}
 	}
 
 	sourceNames := map[string]NodeSource{}
