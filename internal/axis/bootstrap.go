@@ -56,16 +56,16 @@ func (s *Service) buildMainServiceStatus() MainServiceStatus {
 	status.Controller = s.config.Runtime.ExternalController
 	status.ConfigPath = s.configPath
 
-	switch {
-	case !s.state.Runtime.MihomoBinaryFound && !s.config.Runtime.RenderOnly:
-		status.State = "attention"
-		status.Message = "主服务已启动，但还没找到 Mihomo 可执行文件。"
-	case !s.state.Runtime.ControllerReachable && !s.config.Runtime.RenderOnly:
-		status.State = "attention"
-		status.Message = "主服务已启动，但当前还没连上运行中的 Mihomo 控制器。"
-	case s.config.Runtime.RenderOnly:
+	switch s.state.Runtime.State {
+	case "render-only":
 		status.State = "degraded"
-		status.Message = "主服务运行在仅渲染模式，当前不会接管 Mihomo 运行时。"
+		status.Message = s.state.Runtime.Message
+	case "core-missing", "controller-unreachable", "apply-failed":
+		status.State = "error"
+		status.Message = s.state.Runtime.Message
+	case "ready":
+		status.State = "running"
+		status.Message = s.state.Runtime.Message
 	}
 
 	return status

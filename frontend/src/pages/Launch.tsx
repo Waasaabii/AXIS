@@ -58,7 +58,7 @@ export default function Launch() {
     ? [
         {
           title: '主服务',
-          value: data.mainService.state === 'running' ? '已就绪' : data.mainService.state === 'attention' ? '需留意' : data.mainService.state === 'degraded' ? '降级中' : '未就绪',
+          value: data.mainService.state === 'running' ? '已就绪' : data.mainService.state === 'error' ? '需处理' : data.mainService.state === 'attention' ? '需留意' : data.mainService.state === 'degraded' ? '只保存配置' : '未就绪',
           description: data.mainService.message,
           icon: <Cpu className="h-4 w-4" />,
         },
@@ -125,7 +125,7 @@ export default function Launch() {
           <section className="space-y-5 rounded-[2rem] border border-zinc-200/80 bg-zinc-950 p-8 text-zinc-50 shadow-[0_30px_100px_-52px_rgba(24,24,27,0.55)]">
             <div className="space-y-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
-                {data?.mainService.ready ? <CheckCircle2 className="h-3.5 w-3.5" /> : <TriangleAlert className="h-3.5 w-3.5" />}
+                {data?.mainService.ready && data?.mainService.state === 'running' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <TriangleAlert className="h-3.5 w-3.5" />}
                 启动决策
               </div>
               <h2 className="text-2xl font-semibold tracking-tight">当前下一步</h2>
@@ -134,6 +134,8 @@ export default function Launch() {
                   ? error.message
                   : data?.blockingReason
                     ? data.blockingReason
+                    : data?.mainService.state === 'error'
+                      ? data.mainService.message
                     : data?.nextStep === 'setup' && !data.auth.authenticated
                       ? '还没创建管理员账号和密码，会先进入首次初始化。'
                     : data?.nextStep === 'login'

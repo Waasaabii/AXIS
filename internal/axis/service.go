@@ -159,8 +159,9 @@ func (s *Service) detectRuntime() {
 		LastApplyStatus:     firstNonEmpty(s.state.Runtime.LastApplyStatus, "idle"),
 		LastApplyMessage:    s.state.Runtime.LastApplyMessage,
 	}
-	if !binaryFound {
-		s.pushEvent("warn", "runtime", fmt.Sprintf("未找到代理核心程序：%s", s.config.Runtime.MihomoBinary))
+	s.refreshRuntimeStatus()
+	if !binaryFound && !s.config.Runtime.RenderOnly {
+		s.pushEvent("error", "runtime", fmt.Sprintf("未找到代理核心程序：%s", s.config.Runtime.MihomoBinary))
 	}
 }
 
@@ -170,6 +171,7 @@ func (s *Service) detectController(recordEvent bool) {
 	previous := s.state.Controller
 	s.state.Controller = &probe
 	s.state.Runtime.ControllerReachable = probe.Reachable
+	s.refreshRuntimeStatus()
 	if recordEvent && (previous == nil || previous.Reachable != probe.Reachable || previous.Message != probe.Message || previous.Version != probe.Version) {
 		level := "warn"
 		if probe.Reachable {
@@ -177,6 +179,45 @@ func (s *Service) detectController(recordEvent bool) {
 		}
 		s.pushEvent(level, "controller", probe.Message)
 	}
+}
+
+func (s *Service) refreshRuntimeStatus() {
+	if s == nil || s.config == nil || s.state == nil {
+		return
+	}
+
+	runtimeState := &s.state.Runtime
+	if s.config.Runtime.RenderOnly {
+		runtimeState.State = "render-only"
+		runtimeState.Message = "当前只保存配置，暂不会自动应用到代理核心。"
+		runtimeState.Action = "view-runtime"
+		return
+	}
+
+	if !runtimeState.MihomoBinaryFound {
+		runtimeState.State = "core-missing"
+		runtimeState.Message = "还没找到代理核心程序，请到系统页安装或激活代理核心。"
+		runtimeState.Action = "manage-core"
+		return
+	}
+
+	if !runtimeState.ControllerReachable {
+		runtimeState.State = "controller-unreachable"
+		runtimeState.Message = "代理核心程序已就绪，但当前还没连上代理核心。请确认代理核心已启动，并重新检测连接。"
+		runtimeState.Action = "check-controller"
+		return
+	}
+
+	if runtimeState.LastApplyStatus == "failed" {
+		runtimeState.State = "apply-failed"
+		runtimeState.Message = firstNonEmpty(runtimeState.LastApplyMessage, "最新配置还没有应用成功，请查看运行状态。")
+		runtimeState.Action = "view-runtime"
+		return
+	}
+
+	runtimeState.State = "ready"
+	runtimeState.Message = "代理核心已连接，保存后的配置可以自动生效。"
+	runtimeState.Action = ""
 }
 
 func (s *Service) renderRuntimeConfig() (string, error) {
@@ -434,11 +475,9 @@ func (s *Service) buildWarnings() []string {
 	if s.config.Admin.Password != "" {
 		warnings = append(warnings, "管理员密码仍以明文方式写在配置里，建议改成加密保存。")
 	}
-	if !s.state.Runtime.MihomoBinaryFound {
-		warnings = append(warnings, "还没找到代理核心程序，所以当前只能保存配置，不能直接接管运行。")
-	}
-	if !s.config.Runtime.RenderOnly && !s.state.Runtime.ControllerReachable {
-		warnings = append(warnings, "当前已开启自动接管，但还连不上代理核心，请检查程序是否已启动。")
+	switch s.state.Runtime.State {
+	case "core-missing", "controller-unreachable", "apply-failed":
+		warnings = append(warnings, s.state.Runtime.Message)
 	}
 	return warnings
 }

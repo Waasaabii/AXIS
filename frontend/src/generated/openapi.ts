@@ -3437,7 +3437,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 执行中转线��健康检查 */
+        /** 执行中转线路健康检查 */
         post: {
             parameters: {
                 query?: never;
@@ -4143,6 +4143,7 @@ export interface components {
             warnings: number;
         };
         RuntimeState: {
+            action?: string;
             configPath?: string;
             controller?: string;
             controllerReachable: boolean;
@@ -4150,9 +4151,11 @@ export interface components {
             lastApplyMessage?: string;
             lastApplyStatus?: string;
             lastRenderAt?: string;
+            message?: string;
             mihomoBinary?: string;
             mihomoBinaryFound: boolean;
             mode: string;
+            state: string;
         };
         SaveConfigRequest: {
             config: components["schemas"]["Config"];

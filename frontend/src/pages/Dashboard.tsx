@@ -8,19 +8,77 @@ import { NoticeCard } from '@/components/NoticeCard'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { api, ApiError } from '@/services/api'
+import { api, ApiError, type StatusResponse } from '@/services/api'
 import { apiKeys } from '@/services/api-keys'
 
 function formatMode(mode?: string) {
   return mode === 'render-only' ? '只保存配置' : '保存后自动生效'
 }
 
-function buildNextSteps(setupRequired: boolean, warningCount: number) {
+type DashboardRuntimeState = StatusResponse['runtime']
+
+function runtimeActionPath(action?: string) {
+  switch (action) {
+    case 'manage-core':
+      return '/system'
+    case 'check-controller':
+    case 'view-runtime':
+      return '/status'
+    default:
+      return '/interfaces'
+  }
+}
+
+function runtimeActionLabel(action?: string) {
+  switch (action) {
+    case 'manage-core':
+      return '去维护代理核心'
+    case 'check-controller':
+      return '重新检查连接'
+    case 'view-runtime':
+      return '查看运行状态'
+    default:
+      return '整理出口线路'
+  }
+}
+
+function formatRuntimeState(runtime: DashboardRuntimeState) {
+  switch (runtime.state) {
+    case 'ready':
+      return '连接正常'
+    case 'core-missing':
+      return '未准备好'
+    case 'controller-unreachable':
+      return '还没连上'
+    case 'apply-failed':
+      return '应用失败'
+    case 'render-only':
+      return '只保存配置'
+    default:
+      return runtime.controllerReachable ? '连接正常' : '还没连上'
+  }
+}
+
+function buildNextSteps(setupRequired: boolean, runtime: DashboardRuntimeState, warningCount: number) {
   if (setupRequired) {
     return [
       { title: '完成首次初始化', description: '先把密码、订阅和本地代理配好，系统才真正可用。', to: '/setup' },
       { title: '导入订阅', description: '填入订阅链接，让节点进系统。', to: '/subscriptions' },
       { title: '配置本地代理', description: '生成一个设备可连接的代理地址。', to: '/listeners' },
+    ]
+  }
+  if (runtime.state === 'core-missing') {
+    return [
+      { title: '维护代理核心', description: '安装、激活或重新指定代理核心程序。', to: '/system' },
+      { title: '查看运行状态', description: '确认当前缺什么，以及下一步怎么处理。', to: '/status' },
+      { title: '查看最近记录', description: '回溯最近一次检测结果。', to: '/events' },
+    ]
+  }
+  if (runtime.state === 'controller-unreachable') {
+    return [
+      { title: '重新检查连接', description: '确认代理核心已经启动，并重新检测连接。', to: '/status' },
+      { title: '维护代理核心', description: '需要切换版本或路径时，在系统页处理。', to: '/system' },
+      { title: '查看最近记录', description: '回溯最近一次连接失败原因。', to: '/events' },
     ]
   }
   if (warningCount > 0) {
@@ -51,7 +109,9 @@ export default function Dashboard() {
 
   const warningCount = status.warnings.length
   const setupRequired = Boolean(setupState?.required)
-  const nextSteps = buildNextSteps(setupRequired, warningCount)
+  const nextSteps = buildNextSteps(setupRequired, status.runtime, warningCount)
+  const runtimeAction = runtimeActionPath(status.runtime.action)
+  const runtimeMessage = status.runtime.message || status.warnings[0] || '当前没有明显阻塞项，可以继续整理线路。'
 
   return (
     <div className="space-y-6">
@@ -65,19 +125,19 @@ export default function Dashboard() {
         <NoticeCard
           tone={setupRequired || warningCount > 0 ? 'warning' : 'success'}
           icon={setupRequired || warningCount > 0 ? <TriangleAlert className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-          title={setupRequired ? '还差几步才能开始稳定使用' : warningCount > 0 ? '系统能运行，但还有提醒建议先处理' : '系统已经进入可用状态'}
+          title={setupRequired ? '还差几步才能开始稳定使用' : warningCount > 0 ? '代理核心还需要处理' : '系统已经进入可用状态'}
           description={
             setupRequired
               ? '建议先完成初始化，避免后面每一步都被缺口打断。'
               : warningCount > 0
-                ? '能用，但还有提醒。先处理会更稳。'
+                ? runtimeMessage
                 : '目前没有明显阻塞项，可以继续整理线路。'
           }
           action={
             <div className="flex flex-wrap gap-3">
               <Button asChild size="sm">
-                <Link to={setupRequired ? '/setup' : warningCount > 0 ? '/status' : '/interfaces'}>
-                  {setupRequired ? '继续初始化' : warningCount > 0 ? '查看运行状态' : '整理出口线路'}
+                <Link to={setupRequired ? '/setup' : warningCount > 0 ? runtimeAction : '/interfaces'}>
+                  {setupRequired ? '继续初始化' : warningCount > 0 ? runtimeActionLabel(status.runtime.action) : '整理出口线路'}
                 </Link>
               </Button>
               <Button asChild size="sm" variant="outline">
@@ -122,8 +182,8 @@ export default function Dashboard() {
         />
         <OverviewMetric
           title="代理核心状态"
-          value={status.runtime.controllerReachable ? '连接正常' : '还没连上'}
-          description={status.runtime.controllerReachable ? '代理核心已连接。' : '建议去运行状态页检查地址和密钥。'}
+          value={formatRuntimeState(status.runtime)}
+          description={status.runtime.message || (status.runtime.controllerReachable ? '代理核心已连接。' : '建议去运行状态页检查地址和密钥。')}
           icon={<ShieldCheck className="h-4 w-4" />}
         />
         <OverviewMetric
@@ -172,6 +232,7 @@ export default function Dashboard() {
               <SummaryRow label="服务名称" value={status.app.name} />
               <SummaryRow label="启动时间" value={format(new Date(status.app.startedAt), 'PP HH:mm:ss', { locale: zhCN })} />
               <SummaryRow label="当前工作方式" value={formatMode(status.runtime.mode)} />
+              <SummaryRow label="代理核心状态" value={status.runtime.message || formatRuntimeState(status.runtime)} />
               <SummaryRow label="最近一次应用结果" value={status.runtime.lastApplyMessage || '还没有应用记录'} />
               <SummaryRow label="本地代理是否已配置" value={status.counts.listeners > 0 ? '已配置' : '还没有'} />
             </dl>

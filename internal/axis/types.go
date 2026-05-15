@@ -253,6 +253,9 @@ type RuntimeLayout struct {
 
 type RuntimeState struct {
 	Mode                string `json:"mode"`
+	State               string `json:"state"`
+	Message             string `json:"message,omitempty"`
+	Action              string `json:"action,omitempty"`
 	MihomoBinary        string `json:"mihomoBinary,omitempty"`
 	MihomoBinaryFound   bool   `json:"mihomoBinaryFound"`
 	Controller          string `json:"controller,omitempty"`

@@ -261,10 +261,10 @@ func BuildOpenAPISpec() map[string]any {
 			},
 			"required": []string{"server", "admin", "runtime", "node_sources", "routes", "usage", "publications"},
 		},
-		"NodeSource": map[string]any{"type": "object", "additionalProperties": true},
-		"RouteConfig": map[string]any{"type": "object", "additionalProperties": true},
-		"UsageConfig": map[string]any{"type": "object", "additionalProperties": true},
-		"UsageView": map[string]any{"type": "object", "additionalProperties": true},
+		"NodeSource":        map[string]any{"type": "object", "additionalProperties": true},
+		"RouteConfig":       map[string]any{"type": "object", "additionalProperties": true},
+		"UsageConfig":       map[string]any{"type": "object", "additionalProperties": true},
+		"UsageView":         map[string]any{"type": "object", "additionalProperties": true},
 		"PublicationConfig": map[string]any{"type": "object", "additionalProperties": true},
 		"ConfigEnvelope": map[string]any{
 			"type": "object",
@@ -468,6 +468,9 @@ func BuildOpenAPISpec() map[string]any {
 			"type": "object",
 			"properties": map[string]any{
 				"mode":                map[string]any{"type": "string"},
+				"state":               map[string]any{"type": "string"},
+				"message":             map[string]any{"type": "string"},
+				"action":              map[string]any{"type": "string"},
 				"mihomoBinary":        map[string]any{"type": "string"},
 				"mihomoBinaryFound":   map[string]any{"type": "boolean"},
 				"controller":          map[string]any{"type": "string"},
@@ -478,7 +481,7 @@ func BuildOpenAPISpec() map[string]any {
 				"lastApplyStatus":     map[string]any{"type": "string"},
 				"lastApplyMessage":    map[string]any{"type": "string"},
 			},
-			"required": []string{"mode", "mihomoBinaryFound", "controllerReachable"},
+			"required": []string{"mode", "state", "mihomoBinaryFound", "controllerReachable"},
 		},
 		"ControllerState": map[string]any{
 			"type": "object",
@@ -504,9 +507,9 @@ func BuildOpenAPISpec() map[string]any {
 		"StatusCounts": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"nodeSources":  map[string]any{"type": "integer"},
-				"routes":       map[string]any{"type": "integer"},
-				"publications": map[string]any{"type": "integer"},
+				"nodeSources":   map[string]any{"type": "integer"},
+				"routes":        map[string]any{"type": "integer"},
+				"publications":  map[string]any{"type": "integer"},
 				"providers":     map[string]any{"type": "integer"},
 				"groups":        map[string]any{"type": "integer"},
 				"transitRoutes": map[string]any{"type": "integer"},
@@ -1184,7 +1187,7 @@ func BuildOpenAPISpec() map[string]any {
 				},
 			},
 		},
-			"/api/node-sources": map[string]any{
+		"/api/node-sources": map[string]any{
 			"get": map[string]any{
 				"summary":   "节点来源列表",
 				"responses": map[string]any{"200": jsonResponse("节点来源", map[string]any{"type": "array", "items": schemaRef("NodeSource")}), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},
@@ -1193,30 +1196,30 @@ func BuildOpenAPISpec() map[string]any {
 				"summary":     "添加节点来源",
 				"requestBody": jsonBody(schemaRef("NodeSource")),
 				"responses":   mutationErrorResponsesWith200("保存结果", "SaveConfigResponse"),
-				},
 			},
-			"/api/node-sources/{name}/check": map[string]any{
-				"get": map[string]any{
-					"summary": "检查本机节点",
-					"parameters": []map[string]any{pathParam("name", "节点来源名称")},
-					"responses": map[string]any{"200": jsonResponse("检查结果", map[string]any{"type": "object", "additionalProperties": true}), "401": jsonResponse("未登录", schemaRef("ErrorResponse")), "404": jsonResponse("不存在", schemaRef("ErrorResponse"))},
-				},
+		},
+		"/api/node-sources/{name}/check": map[string]any{
+			"get": map[string]any{
+				"summary":    "检查本机节点",
+				"parameters": []map[string]any{pathParam("name", "节点来源名称")},
+				"responses":  map[string]any{"200": jsonResponse("检查结果", map[string]any{"type": "object", "additionalProperties": true}), "401": jsonResponse("未登录", schemaRef("ErrorResponse")), "404": jsonResponse("不存在", schemaRef("ErrorResponse"))},
 			},
-			"/api/node-sources/{name}/connection": map[string]any{
-				"get": map[string]any{
-					"summary": "读取本机节点连接信息",
-					"parameters": []map[string]any{pathParam("name", "节点来源名称")},
-					"responses": map[string]any{"200": jsonResponse("连接信息", map[string]any{"type": "object", "additionalProperties": true}), "400": jsonResponse("请求参数错误", schemaRef("ErrorResponse")), "401": jsonResponse("未登录", schemaRef("ErrorResponse")), "404": jsonResponse("不存在", schemaRef("ErrorResponse"))},
-				},
+		},
+		"/api/node-sources/{name}/connection": map[string]any{
+			"get": map[string]any{
+				"summary":    "读取本机节点连接信息",
+				"parameters": []map[string]any{pathParam("name", "节点来源名称")},
+				"responses":  map[string]any{"200": jsonResponse("连接信息", map[string]any{"type": "object", "additionalProperties": true}), "400": jsonResponse("请求参数错误", schemaRef("ErrorResponse")), "401": jsonResponse("未登录", schemaRef("ErrorResponse")), "404": jsonResponse("不存在", schemaRef("ErrorResponse"))},
 			},
-			"/api/node-sources/{name}/baota-config": map[string]any{
-				"get": map[string]any{
-					"summary": "生成宝塔兼容配置",
-					"parameters": []map[string]any{pathParam("name", "节点来源名称")},
-					"responses": map[string]any{"200": jsonResponse("宝塔配置", map[string]any{"type": "object", "additionalProperties": true}), "401": jsonResponse("未登录", schemaRef("ErrorResponse")), "404": jsonResponse("不存在", schemaRef("ErrorResponse"))},
-				},
+		},
+		"/api/node-sources/{name}/baota-config": map[string]any{
+			"get": map[string]any{
+				"summary":    "生成宝塔兼容配置",
+				"parameters": []map[string]any{pathParam("name", "节点来源名称")},
+				"responses":  map[string]any{"200": jsonResponse("宝塔配置", map[string]any{"type": "object", "additionalProperties": true}), "401": jsonResponse("未登录", schemaRef("ErrorResponse")), "404": jsonResponse("不存在", schemaRef("ErrorResponse"))},
 			},
-			"/api/routes": map[string]any{
+		},
+		"/api/routes": map[string]any{
 			"get": map[string]any{
 				"summary":   "线路列表",
 				"responses": map[string]any{"200": jsonResponse("线路", map[string]any{"type": "array", "items": schemaRef("RouteConfig")}), "401": jsonResponse("未登录", schemaRef("ErrorResponse"))},

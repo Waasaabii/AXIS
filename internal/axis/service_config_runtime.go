@@ -180,6 +180,7 @@ func (s *Service) applyRuntimeConfig(reason string) map[string]any {
 		s.state.Runtime.LastApplyAt = appliedAt
 		s.state.Runtime.LastApplyStatus = "deferred"
 		s.state.Runtime.LastApplyMessage = message
+		s.refreshRuntimeStatus()
 		_ = s.persistState()
 		return map[string]any{"ok": false, "deferred": true, "message": message}
 	}
@@ -192,6 +193,7 @@ func (s *Service) applyRuntimeConfig(reason string) map[string]any {
 		s.state.Runtime.LastApplyStatus = "failed"
 		s.state.Runtime.LastApplyMessage = message
 		s.pushEvent("error", "runtime-apply", fmt.Sprintf("%s: %s", reason, message))
+		s.refreshRuntimeStatus()
 		_ = s.persistState()
 		return map[string]any{"ok": false, "message": message}
 	}
@@ -210,6 +212,7 @@ func (s *Service) applyRuntimeConfig(reason string) map[string]any {
 		s.pushEvent("warn", "runtime-apply", fmt.Sprintf("%s: %s", reason, message))
 	}
 	s.state.Runtime.LastApplyMessage = message
+	s.refreshRuntimeStatus()
 	_ = s.persistState()
 	return map[string]any{"ok": result.OK, "status": result.Status, "message": message}
 }

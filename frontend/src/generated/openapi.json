@@ -1691,6 +1691,9 @@
       },
       "RuntimeState": {
         "properties": {
+          "action": {
+            "type": "string"
+          },
           "configPath": {
             "type": "string"
           },
@@ -1712,6 +1715,9 @@
           "lastRenderAt": {
             "type": "string"
           },
+          "message": {
+            "type": "string"
+          },
           "mihomoBinary": {
             "type": "string"
           },
@@ -1720,10 +1726,14 @@
           },
           "mode": {
             "type": "string"
+          },
+          "state": {
+            "type": "string"
           }
         },
         "required": [
           "mode",
+          "state",
           "mihomoBinaryFound",
           "controllerReachable"
         ],
@@ -5371,7 +5381,7 @@
             "description": "中转线路不存在"
           }
         },
-        "summary": "执行中转线��健康检查"
+        "summary": "执行中转线路健康检查"
       }
     },
     "/api/transit-routes/{name}/update": {

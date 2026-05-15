@@ -142,11 +142,13 @@ http://127.0.0.1:5173
 你会先进入 `Setup` 页面，自己输入管理员账号和密码完成初始化，随后前端会自动登录并直接进入控制台。
 如果订阅、出口线路、本地入口还没补齐，控制台里会继续提示，但不会再强制卡在 `Setup`。
 
-### 5. 开发环境默认就是完整能力
+### 5. 开发环境默认由应用管理代理核心
 
-默认开发模式会直接让 AXIS 接管运行时，不是“只写配置不下发”的裁剪版。
+默认 Web 开发模式启动前端和后端，并使用托管运行态配置。开发脚本不会直接拉起代理核心；代理核心由 AXIS 控制台里的系统能力安装、激活或重新指定。
 
-如果你只是想调界面或调配置，不希望当前开发环境真的接管运行时，可以显式切到仅渲染模式：
+如果当前还没准备好代理核心，项目仍会启动，控制台会在运行状态里明确提示需要处理。
+
+如果你只想调界面或调配置，不希望当前开发环境自动应用到代理核心，可以显式切到仅保存配置：
 
 ```bash
 pnpm dev:web:render-only
@@ -190,8 +192,8 @@ pnpm test
 
 其中：
 
-- `pnpm dev` 保留 Vite 热更新，并默认启用 AXIS 的完整运行时能力
-- `pnpm dev:desktop` 启动 Wails v2 桌面壳，保留前端热更新，并默认启用 AXIS 的完整运行时能力
+- `pnpm dev` 保留 Vite 热更新，并默认使用托管运行态；代理核心在控制台内维护
+- `pnpm dev:desktop` 启动 Wails v2 桌面壳，保留前端热更新，并默认使用托管运行态
 - `pnpm build` 会先构建前端，再把 `frontend/dist` 内嵌进 Go 二进制
 - `pnpm build:desktop` 会先生成最新 OpenAPI 类型，再走 Wails 桌面打包流程
 
@@ -294,7 +296,7 @@ pnpm dev:desktop
 pnpm dev:desktop:render-only
 ```
 
-如果你只想让 Web 开发环境停留在“仅渲染配置”：
+如果你只想让 Web 开发环境停留在“仅保存配置”：
 
 ```bash
 pnpm dev:web:render-only
@@ -692,8 +694,8 @@ pnpm install
 # 启动前端 + 后端
 pnpm dev
 
-# 启动前端 + 后端 + 本地 Mihomo
-pnpm dev
+# 只保存配置，不自动应用到代理核心
+pnpm dev:web:render-only
 
 # 开发数据固定写到 userData/AXIS/dev
 # 入口会先进入 Launch，再自动分流到 Login / Setup / Dashboard
@@ -701,8 +703,7 @@ pnpm dev
 # 启动桌面壳（保留前端热更新，默认接管运行时）
 pnpm dev:desktop
 
-# 只渲染配置，不接管运行时
-pnpm dev:web:render-only
+# 桌面开发只保存配置，不自动应用到代理核心
 pnpm dev:desktop:render-only
 
 # 重置开发 profile，重新走 Setup
